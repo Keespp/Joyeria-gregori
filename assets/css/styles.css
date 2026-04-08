@@ -1,0 +1,73 @@
+﻿/* Estilos adicionales para animaciones y selecciones */
+::selection {
+    background-color: #D4AF37;
+    color: white;
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.grayscale-30 {
+    filter: grayscale(30%) opacity(70%);
+}
+
+.product-zoom-surface {
+    cursor: zoom-in;
+}
+
+.product-zoom-image {
+    transition: transform 0.18s ease-out;
+    will-change: transform;
+}
+
+.toast-card {
+    animation: toast-in 0.28s ease-out forwards;
+}
+
+.toast-card.toast-leaving {
+    animation: toast-out 0.22s ease-in forwards;
+}
+
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translate3d(16px, 0, 0);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+@keyframes toast-out {
+    from {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translate3d(16px, 0, 0);
+    }
+}
