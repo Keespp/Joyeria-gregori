@@ -29,12 +29,12 @@
     <!-- Navegación -->
     <nav class="fixed w-full z-50 bg-white/90 backdrop-blur-md border-b border-zinc-200 transition-all duration-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16 md:h-20">
+            <div class="flex justify-between items-center h-16 md:h-20 gap-2">
                 <!-- Logo -->
-                <div class="flex-shrink-0 flex items-center cursor-pointer gap-3" onclick="navigate('inicio')">
+                <div class="min-w-0 flex items-center cursor-pointer" onclick="navigate('inicio')">
 
                     <!-- INSTRUCCIÓN LOGO (NAVBAR): Para usar tu propio logo, quita el comentario de la etiqueta <img> de abajo y cambia 'RUTA_DE_TU_LOGO.png' por el enlace real de tu imagen. Si vas a usar el logo en imagen, puedes borrar el texto <h1> que dice "Gregori Joyería". -->
-                    <img src="assets/images/logo.svg" alt="Gregori Joyería" class="h-10 w-auto">
+                    <img src="assets/images/logo.svg" alt="Gregori Joyería" class="h-8 md:h-10 w-auto max-w-[150px] md:max-w-none object-contain">
 
                 </div>
 
@@ -44,15 +44,15 @@
                 </div>
 
                 <!-- Botón Menú Móvil -->
-                <div class="lg:hidden flex items-center space-x-4">
+                <div class="lg:hidden shrink-0 flex items-center space-x-2">
                     <button onclick="navigate('carrito')" class="text-zinc-500 hover:text-black" aria-label="Carrito de compra">
-                        <i class="fas fa-cart-shopping text-lg"></i>
+                        <i class="fas fa-cart-shopping text-base sm:text-lg"></i>
                     </button>
                     <button onclick="openSearch()" class="text-zinc-500 hover:text-black" aria-label="Buscar productos">
-                        <i class="fas fa-search text-lg"></i>
+                        <i class="fas fa-search text-base sm:text-lg"></i>
                     </button>
                     <button onclick="toggleMobileMenu()" class="text-zinc-600 hover:text-black">
-                        <i id="mobile-menu-icon" class="fas fa-bars text-2xl"></i>
+                        <i id="mobile-menu-icon" class="fas fa-bars text-xl sm:text-2xl"></i>
                     </button>
                 </div>
             </div>
