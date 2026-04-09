@@ -644,14 +644,14 @@ function renderApp() {
         html = `
             <div class="fade-in">
                 <!-- Hero Section -->
-                <div class="relative h-[85vh] w-full bg-zinc-900 overflow-hidden flex items-center justify-center">
+                <div class="relative min-h-[70vh] md:h-[85vh] w-full bg-zinc-900 overflow-hidden flex items-center justify-center">
                     <img src="https://images.unsplash.com/photo-1602173574767-37ac01994b2a?auto=format&fit=crop&q=80&w=2000" alt="Joyería Fina" class="absolute inset-0 w-full h-full object-cover opacity-60" data-image-label="Gregori Joyeria" data-image-kind="hero" onerror="handleImageError(this)"/>
                     <div class="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/80"></div>
-                    <div class="relative z-10 text-center px-4 max-w-5xl mx-auto flex flex-col items-center mt-10">
+                    <div class="relative z-10 text-center px-4 max-w-5xl mx-auto flex flex-col items-center mt-6 md:mt-10">
                         <span class="uppercase tracking-[0.4em] text-xs md:text-sm mb-6 font-semibold text-gold border-b border-gold/30 pb-2">Comercialización Exclusiva</span>
-                        <h2 class="text-5xl md:text-7xl lg:text-8xl font-serif text-white mb-6 leading-tight drop-shadow-lg">Elegancia que <br/><span class="italic font-light text-zinc-200">llega a ti</span></h2>
-                        <p class="text-zinc-300 max-w-2xl text-base md:text-lg font-light mb-10 drop-shadow-md">Seleccionamos con rigor las piezas más exclusivas del mundo y las llevamos hasta tu puerta con total seguridad y discreción.</p>
-                        <button onclick="navigate('catalogo')" class="px-12 py-5 uppercase tracking-widest text-xs font-bold text-white border border-white/40 hover:border-gold hover:bg-gold transition-all duration-500 hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] bg-black/20 backdrop-blur-sm">Explorar Colección</button>
+                        <h2 class="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-serif text-white mb-5 md:mb-6 leading-tight drop-shadow-lg">Elegancia que <br/><span class="italic font-light text-zinc-200">llega a ti</span></h2>
+                        <p class="text-zinc-300 max-w-2xl text-sm sm:text-base md:text-lg font-light mb-8 md:mb-10 drop-shadow-md">Seleccionamos con rigor las piezas más exclusivas del mundo y las llevamos hasta tu puerta con total seguridad y discreción.</p>
+                        <button onclick="navigate('catalogo')" class="w-full sm:w-auto px-8 sm:px-12 py-4 sm:py-5 uppercase tracking-widest text-xs font-bold text-white border border-white/40 hover:border-gold hover:bg-gold transition-all duration-500 hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] bg-black/20 backdrop-blur-sm">Explorar Colección</button>
                     </div>
                 </div>
 
@@ -679,7 +679,7 @@ function renderApp() {
                 </div>
 
                 <!-- Categorías Destacadas -->
-                <div class="py-20 bg-zinc-50 border-b border-zinc-200">
+                <div class="py-14 md:py-20 bg-zinc-50 border-b border-zinc-200">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                             <div class="relative aspect-[4/5] group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Anillos'); navigate('catalogo')">
@@ -719,14 +719,14 @@ function renderApp() {
                 </div>
 
                 <!-- Destacados -->
-                <div class="py-24 bg-white">
+                <div class="py-16 md:py-24 bg-white">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
                         <div class="flex flex-col items-center justify-center mb-16">
                             <i class="fas fa-gem text-gold text-2xl mb-4 opacity-50"></i>
-                            <h3 class="text-4xl md:text-5xl font-serif text-black mb-4">Piezas Destacadas</h3>
+                            <h3 class="text-3xl md:text-5xl font-serif text-black mb-4">Piezas Destacadas</h3>
                             <div class="w-20 h-[1px] bg-gold"></div>
                         </div>
-                        <div id="inicio-destacados-grid" class="grid grid-cols-1 md:grid-cols-3 gap-10">
+                        <div id="inicio-destacados-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10">
                             ${state.products.slice(0, 3).map(p => renderProductCard(p)).join('')}
                         </div>
                         <div class="mt-20">
@@ -753,10 +753,10 @@ function renderApp() {
         let productsHtml = renderCatalogProducts(filtered);
 
         html = `
-            <div class="py-12 md:py-20">
+            <div class="py-10 md:py-20">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="text-center mb-16">
-                        <h2 class="text-4xl md:text-5xl font-serif text-black mb-6">Nuestra Colección</h2>
+                        <h2 class="text-3xl md:text-5xl font-serif text-black mb-5 md:mb-6">Nuestra Colección</h2>
                         <p class="text-zinc-500 max-w-2xl mx-auto">Explora nuestra selección completa de joyas finas. Cada pieza es elegida bajo estrictos estándares de calidad internacional.</p>
                     </div>
                     <div class="max-w-5xl mx-auto mb-10">
@@ -794,18 +794,18 @@ function renderApp() {
                         <p class="mb-3 text-center text-[11px] uppercase tracking-[0.2em] text-zinc-400">Material</p>
                         <div class="flex flex-wrap justify-center gap-3">${materialFiltersHtml}</div>
                     </div>
-                    <div id="catalog-products-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">${productsHtml}</div>
+                    <div id="catalog-products-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 md:gap-8">${productsHtml}</div>
                 </div>
             </div>`;
     }
     else if (state.activeTab === 'carrito') {
         const cartItems = getCartDetailedItems();
         html = `
-            <div class="py-12 md:py-20 bg-zinc-50 min-h-[70vh]">
+            <div class="py-10 md:py-20 bg-zinc-50 min-h-[70vh]">
                 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                         <div>
-                            <h2 class="text-4xl md:text-5xl font-serif text-black">Carrito de compra</h2>
+                            <h2 class="text-3xl md:text-5xl font-serif text-black">Carrito de compra</h2>
                             <p class="mt-3 text-zinc-500">Agrega varios productos y envía un solo pedido por WhatsApp.</p>
                         </div>
                         ${cartItems.length ? `<button onclick="clearCart()" class="w-fit rounded-full border border-zinc-300 px-5 py-2 text-xs font-bold uppercase tracking-widest text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-black">Vaciar carrito</button>` : ''}
@@ -857,17 +857,17 @@ function renderApp() {
     }
     else if (state.activeTab === 'nosotros') {
         html = `
-            <div class="py-20 fade-in bg-white">
+            <div class="py-12 md:py-20 fade-in bg-white">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="flex flex-col lg:flex-row gap-16 items-center">
-                        <div class="w-full lg:w-1/2 relative h-[600px] overflow-hidden">
+                        <div class="w-full lg:w-1/2 relative h-[360px] sm:h-[460px] lg:h-[600px] overflow-hidden">
                             <img src="assets/images/Nosotrosimg.png" alt="Curaduría"
                                 class="w-full h-full object-cover object-center scale-110"
                                  onerror="handleImageError(this)"/>
                         </div>
                         <div class="w-full lg:w-1/2 lg:pl-10">
                             <span class="uppercase tracking-[0.2em] text-xs font-bold mb-4 block text-gold">Nuestra Filosofía</span>
-                            <h2 class="text-4xl md:text-5xl font-serif text-black mb-8 leading-tight">Alta Joyería con<br/>respaldo y exclusividad</h2>
+                            <h2 class="text-3xl md:text-5xl font-serif text-black mb-6 md:mb-8 leading-tight">Alta Joyería con<br/>respaldo y exclusividad</h2>
                             <div class="space-y-6 text-zinc-600 font-light leading-relaxed">
                                 <p>En <strong>Gregori Joyería</strong> somos una joyería especializada en la comercialización de piezas exclusivas, pensadas para clientes que valoran la elegancia, la distinción y la confianza en cada compra.</p>
                                 <p>Brindamos una experiencia <strong>100% </strong>personalizada, acercando alta joyería a todo el país con atención directa, acompañamiento experto y un proceso de compra seguro.</p>
@@ -880,11 +880,11 @@ function renderApp() {
     }
     else if (state.activeTab === 'trabaja') {
         html = `
-            <div class="py-20 fade-in bg-zinc-900 text-white">
+            <div class="py-12 md:py-20 fade-in bg-zinc-900 text-white">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="text-center mb-16">
                         <i class="fas fa-briefcase text-4xl mb-6 text-gold"></i>
-                        <h2 class="text-4xl md:text-5xl font-serif mb-6">Únete a Nuestro Equipo</h2>
+                        <h2 class="text-3xl md:text-5xl font-serif mb-6">Únete a Nuestro Equipo</h2>
                         <p class="text-zinc-400 max-w-2xl mx-auto text-lg font-light">Buscamos talento apasionado por el lujo para comercializar nuestras colecciones exclusivas.</p>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-12 mt-16">
@@ -917,7 +917,7 @@ function renderApp() {
     }
     else if (state.activeTab === 'contacto') {
         html = `
-            <div class="py-20 fade-in bg-zinc-50">
+            <div class="py-12 md:py-20 fade-in bg-zinc-50">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="text-center mb-16">
                         <h2 class="text-4xl font-serif text-black mb-4">Asesoría Personalizada</h2>
@@ -948,7 +948,7 @@ function renderApp() {
     else if (state.activeTab === 'admin') {
         if (!state.isAdminAuthenticated) {
             html = `
-                <div class="py-20 fade-in bg-zinc-50 min-h-[80vh] flex items-center justify-center">
+                <div class="py-12 md:py-20 fade-in bg-zinc-50 min-h-[80vh] flex items-center justify-center">
                     <div class="bg-white p-10 shadow-sm border border-zinc-200 max-w-md w-full mx-4">
                         <div class="text-center mb-8">
                             <div class="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1191,11 +1191,11 @@ function openModal(id) {
     const btnText = isAgotado ? 'Consultar Disponibilidad' : 'Comprar por WhatsApp';
 
     const modalHtml = `
-        <button onclick="closeModal()" class="absolute top-6 left-6 md:top-10 md:left-10 flex items-center space-x-2 text-zinc-500 hover:text-black transition-colors z-10 bg-white/80 px-4 py-2 rounded-full backdrop-blur-sm">
+        <button onclick="closeModal()" class="absolute top-4 left-4 md:top-10 md:left-10 flex items-center space-x-2 text-zinc-500 hover:text-black transition-colors z-10 bg-white/80 px-3 py-2 md:px-4 rounded-full backdrop-blur-sm">
             <i class="fas fa-arrow-left"></i><span class="uppercase text-xs tracking-widest font-bold">Volver</span>
         </button>
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 min-h-screen">
-            <div class="flex flex-col md:flex-row w-full gap-12 lg:gap-24 items-start">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 md:py-20 min-h-screen">
+            <div class="flex flex-col md:flex-row w-full gap-8 md:gap-12 lg:gap-24 items-start">
                 <div class="w-full md:w-1/2">
                     ${renderProductGallery(product, isAgotado)}
                 </div>
@@ -1205,15 +1205,15 @@ function openModal(id) {
                         <p class="text-[11px] uppercase tracking-widest text-zinc-500">${product.material || 'Oro'}</p>
                         ${isAgotado ? '<span class="px-2 py-1 bg-zinc-200 text-zinc-600 text-[10px] uppercase tracking-widest font-bold rounded-sm">Sin Stock</span>' : ''}
                     </div>
-                    <h2 class="text-4xl md:text-5xl font-serif text-black mb-6 leading-tight">${product.name}</h2>
-                    <p class="text-2xl text-zinc-600 mb-8 font-light">${formatPriceCOP(product.price)}</p>
+                    <h2 class="text-3xl md:text-5xl font-serif text-black mb-5 md:mb-6 leading-tight">${product.name}</h2>
+                    <p class="text-xl md:text-2xl text-zinc-600 mb-6 md:mb-8 font-light">${formatPriceCOP(product.price)}</p>
                     <div class="w-12 h-[1px] bg-zinc-300 mb-8"></div>
                     <p class="text-zinc-600 leading-relaxed mb-12">${product.description}</p>
                     <div class="flex w-full flex-col gap-3 md:w-auto">
-                        <button onclick="contactWhatsApp('${product.id}')" class="w-full md:w-auto px-10 py-4 flex items-center justify-center space-x-3 uppercase tracking-widest text-sm font-bold transition-all duration-300 transform hover:-translate-y-1 shadow-lg ${btnColor}">
+                        <button onclick="contactWhatsApp('${product.id}')" class="w-full md:w-auto px-6 sm:px-10 py-4 flex items-center justify-center space-x-3 uppercase tracking-widest text-xs sm:text-sm font-bold transition-all duration-300 transform hover:-translate-y-1 shadow-lg ${btnColor}">
                             <i class="fab fa-whatsapp text-lg"></i> <span>${btnText}</span>
                         </button>
-                        ${!isAgotado ? `<button onclick="addToCart('${product.id}')" class="w-full md:w-auto px-10 py-4 border border-zinc-300 text-zinc-700 hover:border-black hover:text-black uppercase tracking-widest text-xs font-bold transition-colors">Agregar al carrito</button>` : ''}
+                        ${!isAgotado ? `<button onclick="addToCart('${product.id}')" class="w-full md:w-auto px-6 sm:px-10 py-4 border border-zinc-300 text-zinc-700 hover:border-black hover:text-black uppercase tracking-widest text-xs font-bold transition-colors">Agregar al carrito</button>` : ''}
                     </div>
                     <div class="mt-8 pt-8 border-t border-zinc-100 flex items-center space-x-4 text-sm text-zinc-500">
                         <i class="fas fa-shield-alt"></i><span>100% Compra Segura Online - Envío Asegurado</span>
