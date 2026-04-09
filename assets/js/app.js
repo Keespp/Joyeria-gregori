@@ -18,8 +18,9 @@ document.getElementById('year').textContent = new Date().getFullYear();
 
 // --- ESTADO DE LA APLICACIÓN ---
 const WHATSAPP_NUMBER = "573003216602"; // Número actualizado
-const tabs = ['inicio', 'catalogo', 'nosotros', 'trabaja', 'contacto'];
+const tabs = ['inicio', 'catalogo', 'carrito', 'nosotros', 'trabaja', 'contacto'];
 const categories = ["Todos", "Cadenas", "Aretes", "Anillos", "Pulseras", "Combos"];
+const materials = ["Todos", "Oro", "Plata"];
 const COP_PRICE_FORMATTER = new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
@@ -27,18 +28,19 @@ const COP_PRICE_FORMATTER = new Intl.NumberFormat('es-CO', {
 
 // Guardamos los productos por defecto para poder inicializar la base de datos
 const INITIAL_PRODUCTS = [
-    { name: "Anillo de Compromiso Eternidad", category: "Anillos", price: 2500000, description: "Anillo de compromiso en oro blanco de 18 quilates con un diamante central corte princesa de 1.5 quilates. Una pieza seleccionada de las mejores casas joyeras del mundo.", image: "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&q=80&w=800", status: "disponible" },
-    { name: "Cadena Lágrima de Zafiro", category: "Cadenas", price: 1850000, description: "Elegante cadena con un zafiro azul profundo en forma de lágrima, suspendido en oro blanco con detalles en pequeños diamantes.", image: "https://images.unsplash.com/photo-1599643478514-4a4208a650d9?auto=format&fit=crop&q=80&w=800", status: "disponible" },
-    { name: "Pulsera Tenis Diamantes", category: "Pulseras", price: 3200000, description: "La clásica pulsera tenis, un símbolo de lujo atemporal. Cuenta con una fila continua de diamantes corte brillante montados sobre oro blanco de 18k.", image: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&q=80&w=800", status: "agotado" },
-    { name: "Aretes Perla Cultivada", category: "Aretes", price: 850000, description: "Sofisticados aretes con perlas cultivadas del Mar del Sur, rematados con un sutil engaste en oro amarillo y un pequeño diamante en la base.", image: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&q=80&w=800", status: "disponible" },
-    { name: "Combo Reloj y Pulsera Onyx", category: "Combos", price: 5100000, description: "Combo exclusivo de reloj de precisión con esfera de ónix negro y pulsera a juego en oro rosa. Elegancia y puntualidad en un solo conjunto.", image: "https://images.unsplash.com/photo-1524592094714-a5764260bdcb?auto=format&fit=crop&q=80&w=800", status: "disponible" },
-    { name: "Anillo Sello de Oro 24k", category: "Anillos", price: 1950000, description: "Anillo tipo sello forjado en oro puro de 24 quilates. Un diseño minimalista y rotundo, ideal para personalizar con iniciales.", image: "https://images.unsplash.com/photo-1629224316810-9d8805b95e76?auto=format&fit=crop&q=80&w=800", status: "disponible" }
+    { name: "Anillo de Compromiso Eternidad", category: "Anillos", material: "Oro", price: 2500000, description: "Anillo de compromiso en oro blanco de 18 quilates con un diamante central corte princesa de 1.5 quilates. Una pieza seleccionada de las mejores casas joyeras del mundo.", image: "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&q=80&w=800", status: "disponible" },
+    { name: "Cadena Lágrima de Zafiro", category: "Cadenas", material: "Plata", price: 1850000, description: "Elegante cadena con un zafiro azul profundo en forma de lágrima, suspendido en oro blanco con detalles en pequeños diamantes.", image: "https://images.unsplash.com/photo-1599643478514-4a4208a650d9?auto=format&fit=crop&q=80&w=800", status: "disponible" },
+    { name: "Pulsera Tenis Diamantes", category: "Pulseras", material: "Plata", price: 3200000, description: "La clásica pulsera tenis, un símbolo de lujo atemporal. Cuenta con una fila continua de diamantes corte brillante montados sobre oro blanco de 18k.", image: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&q=80&w=800", status: "agotado" },
+    { name: "Aretes Perla Cultivada", category: "Aretes", material: "Oro", price: 850000, description: "Sofisticados aretes con perlas cultivadas del Mar del Sur, rematados con un sutil engaste en oro amarillo y un pequeño diamante en la base.", image: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&q=80&w=800", status: "disponible" },
+    { name: "Combo Reloj y Pulsera Onyx", category: "Combos", material: "Oro", price: 5100000, description: "Combo exclusivo de reloj de precisión con esfera de ónix negro y pulsera a juego en oro rosa. Elegancia y puntualidad en un solo conjunto.", image: "https://images.unsplash.com/photo-1524592094714-a5764260bdcb?auto=format&fit=crop&q=80&w=800", status: "disponible" },
+    { name: "Anillo Sello de Oro 24k", category: "Anillos", material: "Oro", price: 1950000, description: "Anillo tipo sello forjado en oro puro de 24 quilates. Un diseño minimalista y rotundo, ideal para personalizar con iniciales.", image: "https://images.unsplash.com/photo-1629224316810-9d8805b95e76?auto=format&fit=crop&q=80&w=800", status: "disponible" }
 ];
 
 let state = {
     activeTab: 'inicio',
     isMobileMenuOpen: false,
     filter: 'Todos',
+    materialFilter: 'Todos',
     sortOrder: 'recent',
     searchQuery: '',
     shouldFocusSearch: false,
@@ -47,9 +49,11 @@ let state = {
     selectedProduct: null,
     selectedProductImageIndex: 0,
     isAdminAuthenticated: false, // Estado de autenticación
+    editingProductId: null,
     adminUser: 'Gregori',
     adminPassHash: '', // Se calculará de forma segura al iniciar
-    products: [] // Iniciamos vacío, Firebase se encarga de llenarlo en tiempo real
+    products: [], // Iniciamos vacío, Firebase se encarga de llenarlo en tiempo real
+    cart: []
 };
 
 // --- SINCRONIZACIÓN CON FIREBASE EN TIEMPO REAL ---
@@ -59,6 +63,8 @@ onSnapshot(collection(db, "products"), (snapshot) => {
         id: doc.id,
         ...doc.data()
     }));
+    syncCartWithProducts();
+    renderNav();
     // Ordenar por fecha (más recientes primero)
     state.products.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
@@ -72,6 +78,8 @@ onSnapshot(collection(db, "products"), (snapshot) => {
             if (grid) grid.innerHTML = state.products.slice(0, 3).map(p => renderProductCard(p)).join('');
         } else if (state.activeTab === 'catalogo') {
             updateCatalogSearchUI();
+        } else if (state.activeTab === 'carrito') {
+            renderApp();
         } else if (state.activeTab === 'admin' && state.isAdminAuthenticated) {
             const tbody = document.getElementById('admin-table-body');
             if (tbody) tbody.innerHTML = renderAdminTableRows();
@@ -135,6 +143,7 @@ function toggleMobileMenu() {
 
 function openSearch() {
     state.filter = 'Todos';
+    state.materialFilter = 'Todos';
     state.shouldFocusSearch = true;
     state.shouldSelectSearch = true;
     state.searchCursorPosition = null;
@@ -233,13 +242,44 @@ function getProductImages(product) {
 function normalizeProductRecord(product) {
     const normalizedImages = getProductImages(product);
     const parsedPrice = parsePriceToNumber(product?.price);
+    const material = product?.material === 'Plata' ? 'Plata' : 'Oro';
 
     return {
         ...product,
+        material,
         price: parsedPrice == null ? product?.price : parsedPrice,
         image: normalizedImages[0] || '',
         images: normalizedImages
     };
+}
+
+function syncCartWithProducts() {
+    const productIds = new Set(state.products.map(product => product.id));
+    state.cart = state.cart.filter(item => productIds.has(item.id) && item.quantity > 0);
+}
+
+function getCartCount() {
+    return state.cart.reduce((acc, item) => acc + item.quantity, 0);
+}
+
+function getCartDetailedItems() {
+    return state.cart
+        .map(item => {
+            const product = state.products.find(p => p.id === item.id);
+            if (!product) return null;
+            const unitPrice = parsePriceToNumber(product.price) ?? 0;
+            return {
+                ...item,
+                product,
+                unitPrice,
+                subtotal: unitPrice * item.quantity
+            };
+        })
+        .filter(Boolean);
+}
+
+function getCartTotal() {
+    return getCartDetailedItems().reduce((acc, item) => acc + item.subtotal, 0);
 }
 
 function getPrimaryProductImage(product) {
@@ -393,6 +433,7 @@ function productMatchesSearch(product, query) {
     const searchableText = [
         product.name,
         product.category,
+        product.material,
         product.description,
         product.price,
         formatPriceCOP(product.price),
@@ -408,21 +449,25 @@ function getCatalogFilteredProducts() {
     const filteredByCategory = state.filter === 'Todos'
         ? state.products
         : state.products.filter(p => p.category === state.filter);
+    const filteredByMaterial = state.materialFilter === 'Todos'
+        ? filteredByCategory
+        : filteredByCategory.filter(p => p.material === state.materialFilter);
 
     return getSortedCatalogProducts(
-        filteredByCategory.filter(product => productMatchesSearch(product, normalizedQuery))
+        filteredByMaterial.filter(product => productMatchesSearch(product, normalizedQuery))
     );
 }
 
 function getCatalogResultsLabel(filteredProducts) {
     const resultsLabel = `${filteredProducts.length} resultado${filteredProducts.length === 1 ? '' : 's'}`;
     const activeCollectionLabel = state.filter === 'Todos' ? 'toda la coleccion' : state.filter;
+    const activeMaterialLabel = state.materialFilter === 'Todos' ? '' : ` · ${state.materialFilter.toLowerCase()}`;
 
     if (state.searchQuery.trim()) {
         return `${resultsLabel} para "${state.searchQuery.trim()}"`;
     }
 
-    return `${resultsLabel} en ${activeCollectionLabel}`;
+    return `${resultsLabel} en ${activeCollectionLabel}${activeMaterialLabel}`;
 }
 
 function renderCatalogProducts(products) {
@@ -513,6 +558,10 @@ function renderNav() {
     // Botón de búsqueda (Admin eliminado de aquí para mayor discreción)
     deskHtml += `
         <div class="pl-4 border-l border-zinc-300 flex space-x-4 items-center">
+            <button onclick="navigate('carrito')" title="Carrito" class="relative text-zinc-500 hover:text-black transition-colors" aria-label="Carrito de compra">
+                <i class="fas fa-cart-shopping"></i>
+                ${getCartCount() > 0 ? `<span class="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-gold text-white text-[10px] font-bold flex items-center justify-center">${getCartCount()}</span>` : ''}
+            </button>
             <button onclick="openSearch()" title="Buscar productos" class="text-zinc-500 hover:text-black transition-colors" aria-label="Buscar productos">
                 <i class="fas fa-search"></i>
             </button>
@@ -632,33 +681,37 @@ function renderApp() {
                 <!-- Categorías Destacadas -->
                 <div class="py-20 bg-zinc-50 border-b border-zinc-200">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div class="flex flex-col md:flex-row gap-6 h-[600px]">
-                            <!-- Categoria 1 -->
-                            <div class="relative w-full md:w-1/2 h-full group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Anillos'); navigate('catalogo')">
-                                <img src="https://images.unsplash.com/photo-1631982690223-8aa4be0a2497?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Anillos">
-                                <div class="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors duration-500"></div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div class="relative aspect-[4/5] group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Anillos'); navigate('catalogo')">
+                                <img src="https://images.unsplash.com/photo-1631982690223-8aa4be0a2497?q=80&w=764&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Anillos">
+                                <div class="absolute inset-0 bg-black/35 group-hover:bg-black/55 transition-colors duration-500"></div>
                                 <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
                                     <h3 class="text-3xl font-serif text-white mb-3">Anillos</h3>
-                                    <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform translate-y-4 group-hover:translate-y-0">Ver Colección</span>
+                                    <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">Ver colección</span>
                                 </div>
                             </div>
-                            <!-- Categorias 2 y 3 -->
-                            <div class="flex flex-col w-full md:w-1/2 gap-6 h-full">
-                                <div class="relative w-full h-1/2 group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Cadenas'); navigate('catalogo')">
-                                    <img src="https://images.unsplash.com/photo-1643236027686-399d6ebbbae0?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Cadenas">
-                                    <div class="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors duration-500"></div>
-                                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                                        <h3 class="text-3xl font-serif text-white mb-3">Cadenas</h3>
-                                        <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform translate-y-4 group-hover:translate-y-0">Ver Colección</span>
-                                    </div>
+                            <div class="relative aspect-[4/5] group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Cadenas'); navigate('catalogo')">
+                                <img src="https://images.unsplash.com/photo-1643236027686-399d6ebbbae0?q=80&w=687&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Cadenas">
+                                <div class="absolute inset-0 bg-black/35 group-hover:bg-black/55 transition-colors duration-500"></div>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+                                    <h3 class="text-3xl font-serif text-white mb-3">Cadenas</h3>
+                                    <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">Ver colección</span>
                                 </div>
-                                <div class="relative w-full h-1/2 group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Pulseras'); navigate('catalogo')">
-                                    <img src="https://plus.unsplash.com/premium_photo-1709033404514-c3953af680b4?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Pulseras">
-                                    <div class="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors duration-500"></div>
-                                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                                        <h3 class="text-3xl font-serif text-white mb-3">Pulseras</h3>
-                                        <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform translate-y-4 group-hover:translate-y-0">Ver Colección</span>
-                                    </div>
+                            </div>
+                            <div class="relative aspect-[4/5] group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Aretes'); navigate('catalogo')">
+                                <img src="https://images.unsplash.com/photo-1617038220319-276d3cfab638?q=80&w=880&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Aretes">
+                                <div class="absolute inset-0 bg-black/35 group-hover:bg-black/55 transition-colors duration-500"></div>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+                                    <h3 class="text-3xl font-serif text-white mb-3">Aretes</h3>
+                                    <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">Ver colección</span>
+                                </div>
+                            </div>
+                            <div class="relative aspect-[4/5] group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Pulseras'); navigate('catalogo')">
+                                <img src="https://plus.unsplash.com/premium_photo-1709033404514-c3953af680b4?q=80&w=687&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Pulseras">
+                                <div class="absolute inset-0 bg-black/35 group-hover:bg-black/55 transition-colors duration-500"></div>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+                                    <h3 class="text-3xl font-serif text-white mb-3">Pulseras</h3>
+                                    <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">Ver colección</span>
                                 </div>
                             </div>
                         </div>
@@ -691,6 +744,10 @@ function renderApp() {
         let filtersHtml = categories.map(cat => {
             const isActive = state.filter === cat ? 'bg-gold text-white shadow-md' : 'bg-white text-zinc-500 border border-zinc-200 hover:border-zinc-400 hover:text-black';
             return `<button onclick="setFilter('${cat}')" class="px-6 py-2 rounded-full uppercase tracking-widest text-xs font-semibold transition-all duration-300 ${isActive}">${cat}</button>`;
+        }).join('');
+        const materialFiltersHtml = materials.map(material => {
+            const isActive = state.materialFilter === material ? 'bg-black text-white shadow-md' : 'bg-white text-zinc-500 border border-zinc-200 hover:border-zinc-400 hover:text-black';
+            return `<button onclick="setMaterialFilter('${material}')" class="px-5 py-2 rounded-full uppercase tracking-widest text-xs font-semibold transition-all duration-300 ${isActive}">${material}</button>`;
         }).join('');
 
         let productsHtml = renderCatalogProducts(filtered);
@@ -729,8 +786,72 @@ function renderApp() {
                         </div>
                         <p id="catalog-results-label" class="mt-4 text-center text-xs uppercase tracking-widest text-zinc-400">${escapeHtml(getCatalogResultsLabel(filtered))}</p>
                     </div>
-                    <div class="flex flex-wrap justify-center gap-4 mb-16">${filtersHtml}</div>
+                    <div class="mb-6">
+                        <p class="mb-3 text-center text-[11px] uppercase tracking-[0.2em] text-zinc-400">Categoría</p>
+                        <div class="flex flex-wrap justify-center gap-4">${filtersHtml}</div>
+                    </div>
+                    <div class="mb-16">
+                        <p class="mb-3 text-center text-[11px] uppercase tracking-[0.2em] text-zinc-400">Material</p>
+                        <div class="flex flex-wrap justify-center gap-3">${materialFiltersHtml}</div>
+                    </div>
                     <div id="catalog-products-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">${productsHtml}</div>
+                </div>
+            </div>`;
+    }
+    else if (state.activeTab === 'carrito') {
+        const cartItems = getCartDetailedItems();
+        html = `
+            <div class="py-12 md:py-20 bg-zinc-50 min-h-[70vh]">
+                <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                        <div>
+                            <h2 class="text-4xl md:text-5xl font-serif text-black">Carrito de compra</h2>
+                            <p class="mt-3 text-zinc-500">Agrega varios productos y envía un solo pedido por WhatsApp.</p>
+                        </div>
+                        ${cartItems.length ? `<button onclick="clearCart()" class="w-fit rounded-full border border-zinc-300 px-5 py-2 text-xs font-bold uppercase tracking-widest text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-black">Vaciar carrito</button>` : ''}
+                    </div>
+                    ${cartItems.length ? `
+                        <div class="space-y-4">
+                            ${cartItems.map(item => `
+                                <div class="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                                    <div class="flex items-center gap-4">
+                                        <img src="${getPrimaryProductImage(item.product)}" alt="${item.product.name}" class="h-20 w-20 rounded-xl object-cover" data-image-source="${escapeHtml(getPrimaryProductImage(item.product))}" data-image-label="${escapeHtml(item.product.category)}" data-image-kind="product" referrerpolicy="no-referrer" onerror="handleImageError(this)" />
+                                        <div>
+                                            <p class="font-serif text-xl text-black">${item.product.name}</p>
+                                            <p class="text-xs uppercase tracking-widest text-zinc-400">${item.product.category} · ${item.product.material}</p>
+                                            <p class="mt-1 text-sm text-zinc-500">${formatPriceCOP(item.unitPrice)} c/u</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <button onclick="changeCartQuantity('${item.id}', -1)" class="h-9 w-9 rounded-full border border-zinc-300 text-zinc-600 hover:bg-zinc-100">-</button>
+                                        <span class="min-w-8 text-center text-sm font-semibold">${item.quantity}</span>
+                                        <button onclick="changeCartQuantity('${item.id}', 1)" class="h-9 w-9 rounded-full border border-zinc-300 text-zinc-600 hover:bg-zinc-100">+</button>
+                                        <p class="ml-3 min-w-28 text-right text-sm font-semibold text-zinc-700">${formatPriceCOP(item.subtotal)}</p>
+                                        <button onclick="removeFromCart('${item.id}')" class="ml-2 text-zinc-400 transition-colors hover:text-red-600" aria-label="Eliminar producto">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                            <div class="flex items-center justify-between">
+                                <p class="text-sm uppercase tracking-widest text-zinc-500">Total estimado</p>
+                                <p class="text-2xl font-serif text-black">${formatPriceCOP(getCartTotal())}</p>
+                            </div>
+                            <button onclick="checkoutCartWhatsApp()" class="mt-6 w-full rounded-full bg-gold px-8 py-4 text-sm font-bold uppercase tracking-widest text-white transition-colors hover:bg-yellow-700">
+                                Enviar pedido por WhatsApp
+                            </button>
+                        </div>
+                    ` : `
+                        <div class="rounded-2xl border border-dashed border-zinc-300 bg-white p-14 text-center">
+                            <i class="fas fa-cart-shopping text-4xl text-zinc-300"></i>
+                            <p class="mt-6 text-lg text-zinc-500">Tu carrito está vacío.</p>
+                            <button onclick="navigate('catalogo')" class="mt-8 rounded-full border border-black px-7 py-3 text-xs font-bold uppercase tracking-widest text-black transition-colors hover:bg-black hover:text-white">
+                                Ir al catálogo
+                            </button>
+                        </div>
+                    `}
                 </div>
             </div>`;
     }
@@ -867,23 +988,27 @@ function renderApp() {
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
                             <!-- Formulario -->
                             <div class="lg:col-span-1 bg-white p-6 shadow-sm border border-zinc-200 h-fit">
-                                <h3 class="uppercase tracking-widest text-sm font-bold text-black mb-6 flex items-center gap-2"><i class="fas fa-plus"></i> Nuevo Producto</h3>
+                                <h3 class="uppercase tracking-widest text-sm font-bold text-black mb-6 flex items-center gap-2"><i class="fas ${state.editingProductId ? 'fa-pen' : 'fa-plus'}"></i> ${state.editingProductId ? 'Editar Producto' : 'Nuevo Producto'}</h3>
                                 <form onsubmit="handleAddProduct(event)" class="space-y-4">
                                     <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Nombre</label>
-                                    <input required id="add-name" type="text" class="w-full border border-zinc-300 p-2 text-sm focus:border-yellow-600 focus:outline-none" /></div>
-                                    <div class="grid grid-cols-2 gap-4">
+                                    <input required id="add-name" type="text" value="${state.editingProductId ? escapeHtml(state.products.find(p => p.id === state.editingProductId)?.name || '') : ''}" class="w-full border border-zinc-300 p-2 text-sm focus:border-yellow-600 focus:outline-none" /></div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                         <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Categoría</label>
                                         <select id="add-cat" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none">
-                                            ${categories.filter(c => c !== 'Todos').map(c => `<option value="${c}">${c}</option>`).join('')}
+                                            ${categories.filter(c => c !== 'Todos').map(c => `<option value="${c}" ${state.editingProductId && state.products.find(p => p.id === state.editingProductId)?.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                        </select></div>
+                                        <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Material</label>
+                                        <select id="add-material" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none">
+                                            ${materials.filter(m => m !== 'Todos').map(m => `<option value="${m}" ${state.editingProductId && state.products.find(p => p.id === state.editingProductId)?.material === m ? 'selected' : ''}>${m}</option>`).join('')}
                                         </select></div>
                                         <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Precio</label>
-                                        <input required id="add-price" type="text" inputmode="numeric" placeholder="200.000" onblur="formatAdminPriceInput()" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" /></div>
+                                        <input required id="add-price" type="text" value="${state.editingProductId ? escapeHtml(formatPriceForInput(state.products.find(p => p.id === state.editingProductId)?.price)) : ''}" inputmode="numeric" placeholder="200.000" onblur="formatAdminPriceInput()" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" /></div>
                                     </div>
                                     <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Imágenes del producto</label>
                                     <div class="space-y-3">
-                                    <input required id="add-img-1" type="url" placeholder="Foto 1" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" />
-                                    <input id="add-img-2" type="url" placeholder="Foto 2" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" />
-                                    <input id="add-img-3" type="url" placeholder="Foto 3" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" />
+                                    <input required id="add-img-1" type="url" value="${state.editingProductId ? escapeHtml(getProductImages(state.products.find(p => p.id === state.editingProductId) || {})[0] || '') : ''}" placeholder="Foto 1" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" />
+                                    <input id="add-img-2" type="url" value="${state.editingProductId ? escapeHtml(getProductImages(state.products.find(p => p.id === state.editingProductId) || {})[1] || '') : ''}" placeholder="Foto 2" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" />
+                                    <input id="add-img-3" type="url" value="${state.editingProductId ? escapeHtml(getProductImages(state.products.find(p => p.id === state.editingProductId) || {})[2] || '') : ''}" placeholder="Foto 3" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" />
                                     </div>
                                     <div class="mt-2 flex items-center justify-between gap-3">
                                         <p class="text-[11px] text-zinc-400">Puedes cargar entre 1 y 3 imágenes. La primera será la portada del producto.</p>
@@ -891,12 +1016,15 @@ function renderApp() {
                                     </div>
                                     </div>
                                     <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Descripción</label>
-                                    <textarea required id="add-desc" rows="3" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none"></textarea></div>
+                                    <textarea required id="add-desc" rows="3" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none">${state.editingProductId ? escapeHtml(state.products.find(p => p.id === state.editingProductId)?.description || '') : ''}</textarea></div>
                                     <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Estado</label>
                                     <select id="add-status" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none">
-                                        <option value="disponible">Disponible</option><option value="agotado">Agotado</option>
+                                        <option value="disponible" ${state.editingProductId && state.products.find(p => p.id === state.editingProductId)?.status === 'disponible' ? 'selected' : ''}>Disponible</option><option value="agotado" ${state.editingProductId && state.products.find(p => p.id === state.editingProductId)?.status === 'agotado' ? 'selected' : ''}>Agotado</option>
                                     </select></div>
-                                    <button id="add-submit" type="submit" class="w-full py-3 mt-4 text-white text-sm uppercase tracking-widest font-bold bg-gold hover:bg-yellow-700 transition-colors">Guardar Producto</button>
+                                    <div class="grid grid-cols-1 ${state.editingProductId ? 'sm:grid-cols-2' : ''} gap-3">
+                                        <button id="add-submit" type="submit" class="w-full py-3 mt-4 text-white text-sm uppercase tracking-widest font-bold bg-gold hover:bg-yellow-700 transition-colors">${state.editingProductId ? 'Actualizar Producto' : 'Guardar Producto'}</button>
+                                        ${state.editingProductId ? '<button type="button" onclick="cancelEditProduct()" class="w-full py-3 mt-4 border border-zinc-300 text-zinc-600 text-sm uppercase tracking-widest font-bold hover:bg-zinc-100 transition-colors">Cancelar</button>' : ''}
+                                    </div>
                                 </form>
                             </div>
                             <!-- Tabla -->
@@ -939,11 +1067,14 @@ function renderAdminTableRows() {
         <tr class="hover:bg-zinc-50 transition-colors">
             <td class="p-4 flex items-center gap-3">
                 <img src="${getPrimaryProductImage(p)}" class="w-10 h-10 object-cover rounded-sm border border-zinc-200" data-image-source="${escapeHtml(getPrimaryProductImage(p))}" data-image-label="${escapeHtml(p.category)}" data-image-kind="product" referrerpolicy="no-referrer" onerror="handleImageError(this)" />
-                <div><p class="font-semibold text-black line-clamp-1">${p.name}</p><p class="text-xs text-zinc-500">${p.category} · ${getProductImages(p).length} foto${getProductImages(p).length === 1 ? '' : 's'}</p></div>
+                <div><p class="font-semibold text-black line-clamp-1">${p.name}</p><p class="text-xs text-zinc-500">${p.category} · ${p.material} · ${getProductImages(p).length} foto${getProductImages(p).length === 1 ? '' : 's'}</p></div>
             </td>
             <td class="p-4">${formatPriceCOP(p.price)}</td>
             <td class="p-4"><button onclick="toggleStatus('${p.id}')" class="px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-bold border transition-colors ${p.status === 'disponible' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}">${p.status}</button></td>
-            <td class="p-4 text-right"><button onclick="deleteProduct('${p.id}')" class="text-zinc-400 hover:text-red-600 transition-colors p-2"><i class="fas fa-trash-alt"></i></button></td>
+            <td class="p-4 text-right">
+                <button onclick="startEditProduct('${p.id}')" class="text-zinc-400 hover:text-blue-600 transition-colors p-2" aria-label="Editar producto"><i class="fas fa-pen"></i></button>
+                <button onclick="deleteProduct('${p.id}')" class="text-zinc-400 hover:text-red-600 transition-colors p-2" aria-label="Eliminar producto"><i class="fas fa-trash-alt"></i></button>
+            </td>
         </tr>
     `).join('');
 }
@@ -956,6 +1087,7 @@ function renderProductCard(product, inCatalog = false) {
     let badges = '';
     if (inCatalog) {
         badges += `<span class="bg-white/90 backdrop-blur-sm px-3 py-1 text-[10px] uppercase tracking-widest font-bold text-zinc-800 w-fit">${product.category}</span>`;
+        badges += `<span class="bg-black/80 backdrop-blur-sm px-3 py-1 text-[10px] uppercase tracking-widest font-bold text-white w-fit">${product.material || 'Oro'}</span>`;
     }
     if (isAgotado) {
         badges += `<span class="bg-black/90 text-white px-3 py-1 text-[10px] uppercase tracking-widest font-bold w-fit ${!inCatalog ? 'absolute top-4 right-4 z-10' : ''}">Agotado</span>`;
@@ -973,6 +1105,7 @@ function renderProductCard(product, inCatalog = false) {
             <div class="text-center">
                 <h4 class="font-serif text-lg text-black mb-1 line-clamp-1">${product.name}</h4>
                 <p class="text-sm text-gold font-medium">${formatPriceCOP(product.price)}</p>
+                ${inCatalog && !isAgotado ? `<button onclick="event.stopPropagation(); addToCart('${product.id}')" class="mt-4 rounded-full border border-zinc-300 px-4 py-2 text-[11px] uppercase tracking-widest font-bold text-zinc-700 transition-colors hover:border-black hover:text-black">Agregar al carrito</button>` : ''}
             </div>
         </div>
     `;
@@ -1069,15 +1202,19 @@ function openModal(id) {
                 <div class="w-full md:w-1/2 flex flex-col justify-center md:pt-8">
                     <div class="flex items-center space-x-4 mb-4">
                         <p class="text-sm uppercase tracking-widest text-gold">${product.category}</p>
+                        <p class="text-[11px] uppercase tracking-widest text-zinc-500">${product.material || 'Oro'}</p>
                         ${isAgotado ? '<span class="px-2 py-1 bg-zinc-200 text-zinc-600 text-[10px] uppercase tracking-widest font-bold rounded-sm">Sin Stock</span>' : ''}
                     </div>
                     <h2 class="text-4xl md:text-5xl font-serif text-black mb-6 leading-tight">${product.name}</h2>
                     <p class="text-2xl text-zinc-600 mb-8 font-light">${formatPriceCOP(product.price)}</p>
                     <div class="w-12 h-[1px] bg-zinc-300 mb-8"></div>
                     <p class="text-zinc-600 leading-relaxed mb-12">${product.description}</p>
-                    <button onclick="contactWhatsApp('${product.id}')" class="w-full md:w-auto px-10 py-4 flex items-center justify-center space-x-3 uppercase tracking-widest text-sm font-bold transition-all duration-300 transform hover:-translate-y-1 shadow-lg ${btnColor}">
-                        <i class="fab fa-whatsapp text-lg"></i> <span>${btnText}</span>
-                    </button>
+                    <div class="flex w-full flex-col gap-3 md:w-auto">
+                        <button onclick="contactWhatsApp('${product.id}')" class="w-full md:w-auto px-10 py-4 flex items-center justify-center space-x-3 uppercase tracking-widest text-sm font-bold transition-all duration-300 transform hover:-translate-y-1 shadow-lg ${btnColor}">
+                            <i class="fab fa-whatsapp text-lg"></i> <span>${btnText}</span>
+                        </button>
+                        ${!isAgotado ? `<button onclick="addToCart('${product.id}')" class="w-full md:w-auto px-10 py-4 border border-zinc-300 text-zinc-700 hover:border-black hover:text-black uppercase tracking-widest text-xs font-bold transition-colors">Agregar al carrito</button>` : ''}
+                    </div>
                     <div class="mt-8 pt-8 border-t border-zinc-100 flex items-center space-x-4 text-sm text-zinc-500">
                         <i class="fas fa-shield-alt"></i><span>100% Compra Segura Online - Envío Asegurado</span>
                     </div>
@@ -1152,6 +1289,76 @@ function openWorkWithUsWhatsApp() {
 
 function setFilter(cat) {
     state.filter = cat;
+    updateCatalogSearchUI();
+}
+
+function setMaterialFilter(material) {
+    state.materialFilter = material;
+    updateCatalogSearchUI();
+}
+
+function addToCart(productId) {
+    const product = state.products.find(p => p.id === productId);
+    if (!product || product.status === 'agotado') {
+        showToast("Este producto no está disponible para agregar al carrito.", 'error');
+        return;
+    }
+
+    const existing = state.cart.find(item => item.id === productId);
+    if (existing) {
+        existing.quantity += 1;
+    } else {
+        state.cart.push({ id: productId, quantity: 1 });
+    }
+
+    renderNav();
+    if (state.activeTab === 'carrito') renderApp();
+    showToast("Producto agregado al carrito.", 'success');
+}
+
+function changeCartQuantity(productId, delta) {
+    const item = state.cart.find(entry => entry.id === productId);
+    if (!item) return;
+    item.quantity += delta;
+    if (item.quantity <= 0) {
+        state.cart = state.cart.filter(entry => entry.id !== productId);
+    }
+    renderNav();
+    renderApp();
+}
+
+function removeFromCart(productId) {
+    state.cart = state.cart.filter(item => item.id !== productId);
+    renderNav();
+    if (state.activeTab === 'carrito') renderApp();
+}
+
+function clearCart() {
+    state.cart = [];
+    renderNav();
+    renderApp();
+}
+
+function checkoutCartWhatsApp() {
+    const items = getCartDetailedItems();
+    if (!items.length) {
+        showToast("Tu carrito está vacío.", 'info');
+        return;
+    }
+
+    const lines = items.map(item => `- ${item.product.name} (${item.quantity} x ${formatPriceCOP(item.unitPrice)}) = ${formatPriceCOP(item.subtotal)}`);
+    const message = `Hola Gregori Joyería, quiero comprar estos productos:\n\n${lines.join('\n')}\n\nTotal estimado: ${formatPriceCOP(getCartTotal())}`;
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, '_blank');
+}
+
+function startEditProduct(id) {
+    state.editingProductId = id;
+    renderApp();
+    window.scrollTo(0, 0);
+}
+
+function cancelEditProduct() {
+    state.editingProductId = null;
     renderApp();
 }
 
@@ -1166,6 +1373,9 @@ async function toggleStatus(id) {
 async function deleteProduct(id) {
     if (confirm("¿Seguro que deseas eliminar este producto?")) {
         await deleteDoc(doc(db, "products", id));
+        if (state.editingProductId === id) {
+            state.editingProductId = null;
+        }
     }
 }
 
@@ -1314,6 +1524,7 @@ async function collectValidatedProductImages() {
 
 async function handleAddProduct(e) {
     e.preventDefault();
+    const isEditing = Boolean(state.editingProductId);
     const submitButton = document.getElementById('add-submit');
     const priceInput = document.getElementById('add-price');
     const parsedPrice = parsePriceToNumber(priceInput.value);
@@ -1327,7 +1538,7 @@ async function handleAddProduct(e) {
 
     if (submitButton) {
         submitButton.disabled = true;
-        submitButton.textContent = 'Validando imágenes...';
+        submitButton.textContent = isEditing ? 'Actualizando...' : 'Validando imágenes...';
         submitButton.classList.add('opacity-70', 'cursor-not-allowed');
     }
 
@@ -1335,7 +1546,7 @@ async function handleAddProduct(e) {
 
     if (submitButton) {
         submitButton.disabled = false;
-        submitButton.textContent = 'Guardar Producto';
+        submitButton.textContent = isEditing ? 'Actualizar Producto' : 'Guardar Producto';
         submitButton.classList.remove('opacity-70', 'cursor-not-allowed');
     }
 
@@ -1346,6 +1557,7 @@ async function handleAddProduct(e) {
     const newProduct = {
         name: document.getElementById('add-name').value,
         category: document.getElementById('add-cat').value,
+        material: document.getElementById('add-material').value,
         price: parsedPrice,
         image: validatedImages[0],
         images: validatedImages,
@@ -1355,10 +1567,16 @@ async function handleAddProduct(e) {
     };
 
     try {
-        // Guardar en Firebase en lugar de local
-        await addDoc(collection(db, "products"), normalizeProductRecord(newProduct));
-        showToast("Producto agregado correctamente.", 'success');
-        e.target.reset(); // Limpia el formulario
+        if (isEditing) {
+            await updateDoc(doc(db, "products", state.editingProductId), normalizeProductRecord(newProduct));
+            showToast("Producto actualizado correctamente.", 'success');
+            state.editingProductId = null;
+        } else {
+            await addDoc(collection(db, "products"), normalizeProductRecord(newProduct));
+            showToast("Producto agregado correctamente.", 'success');
+            e.target.reset();
+        }
+        renderApp();
     } catch (error) {
         console.error("Error agregando producto: ", error);
         showToast("Hubo un error al guardar el producto.", 'error');
@@ -1369,10 +1587,12 @@ async function handleAddProduct(e) {
 // Al conectar Firebase como módulo moderno, las funciones necesitan exponerse manualmente.
 Object.assign(window, {
     navigate, toggleMobileMenu, openSearch, setSearchQuery, clearSearch,
-    handleLogin, handleLogout, setFilter, setSortOrder, toggleStatus, deleteProduct,
+    handleLogin, handleLogout, setFilter, setMaterialFilter, setSortOrder, toggleStatus, deleteProduct,
     handleAddProduct, openModal, closeModal, contactWhatsApp,
     handleProductZoomMove, resetProductZoom, setSelectedProductImage,
-    openWorkWithUsWhatsApp, formatAdminPriceInput, seedInitialData, showToast
+    openWorkWithUsWhatsApp, formatAdminPriceInput, seedInitialData, showToast,
+    addToCart, changeCartQuantity, removeFromCart, clearCart, checkoutCartWhatsApp,
+    startEditProduct, cancelEditProduct
 });
 
 // --- INICIALIZACIÓN ---
