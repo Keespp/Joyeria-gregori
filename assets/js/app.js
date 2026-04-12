@@ -262,6 +262,32 @@ function getCartCount() {
     return state.cart.reduce((acc, item) => acc + item.quantity, 0);
 }
 
+function shouldShowFloatingCartFab() {
+    if (state.activeTab === 'carrito' || state.activeTab === 'admin') return false;
+    const modal = document.getElementById('product-modal');
+    const modalOpen = modal && !modal.classList.contains('hidden');
+    return state.activeTab === 'catalogo' || modalOpen;
+}
+
+function updateFloatingCartFab() {
+    const el = document.getElementById('floating-cart-fab');
+    if (!el) return;
+    if (!shouldShowFloatingCartFab()) {
+        el.classList.add('hidden');
+        el.innerHTML = '';
+        el.setAttribute('aria-hidden', 'true');
+        return;
+    }
+    const count = getCartCount();
+    el.classList.remove('hidden');
+    el.setAttribute('aria-hidden', 'false');
+    el.innerHTML = `
+        <button type="button" onclick="navigate('carrito')" class="pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full bg-gold text-white shadow-lg shadow-black/20 transition-transform hover:scale-105 hover:bg-yellow-700 md:h-16 md:w-16" title="Ir al carrito" aria-label="Ir al carrito de compra">
+            <i class="fas fa-cart-shopping text-lg md:text-xl"></i>
+            ${count > 0 ? `<span class="absolute -top-1 -right-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-black px-1.5 text-[11px] font-bold text-white">${count > 99 ? '99+' : count}</span>` : ''}
+        </button>`;
+}
+
 function getCartDetailedItems() {
     return state.cart
         .map(item => {
@@ -584,6 +610,8 @@ function renderNav() {
         mobContainer.classList.add('hidden');
         mobIcon.className = 'fas fa-bars text-2xl';
     }
+
+    updateFloatingCartFab();
 }
 
 function setSearchQuery(value, cursorPosition = value.length) {
@@ -649,9 +677,8 @@ function renderApp() {
                     <div class="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/80"></div>
                     <div class="relative z-10 text-center px-4 max-w-5xl mx-auto flex flex-col items-center mt-6 md:mt-10">
                         <span class="uppercase tracking-[0.4em] text-xs md:text-sm mb-6 font-semibold text-gold border-b border-gold/30 pb-2">Comercialización Exclusiva</span>
-                        <p class="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-zinc-400 mb-4 md:mb-5 font-medium">Hecho para tu estilo</p>
                         <h2 class="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-serif text-white mb-5 md:mb-6 leading-tight drop-shadow-lg">Detalles que <br/><span class="italic font-light text-zinc-200">brillan contigo</span></h2>
-                        <p class="text-zinc-300 max-w-2xl text-sm sm:text-base md:text-lg font-light mb-8 md:mb-10 drop-shadow-md">Seleccionamos con rigor las piezas más exclusivas del mundo y las llevamos hasta tu puerta con total seguridad y discreción.</p>
+                        <p class="text-zinc-300 max-w-2xl text-sm sm:text-base md:text-lg font-light mb-8 md:mb-10 drop-shadow-md">Hecho para tu estilo</p>
                         <button onclick="navigate('catalogo')" class="w-full sm:w-auto px-8 sm:px-12 py-4 sm:py-5 uppercase tracking-widest text-xs font-bold text-white border border-white/40 hover:border-gold hover:bg-gold transition-all duration-500 hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] bg-black/20 backdrop-blur-sm">Explorar Colección</button>
                     </div>
                 </div>
@@ -1060,6 +1087,8 @@ function renderApp() {
         state.shouldFocusSearch = false;
         focusCatalogSearch();
     }
+
+    updateFloatingCartFab();
 }
 
 // --- COMPONENTES AUXILIARES ---
@@ -1229,6 +1258,7 @@ function openModal(id) {
     modalContainer.innerHTML = modalHtml;
     modalContainer.classList.remove('hidden');
     document.body.style.overflow = 'hidden'; // Evitar scroll de fondo
+    updateFloatingCartFab();
 }
 
 function closeModal() {
@@ -1238,6 +1268,7 @@ function closeModal() {
     modalContainer.classList.add('hidden');
     document.body.style.overflow = 'auto';
     modalContainer.innerHTML = '';
+    updateFloatingCartFab();
 }
 
 function setSelectedProductImage(index) {
