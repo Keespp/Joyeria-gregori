@@ -16,6 +16,9 @@ const db = getFirestore(app);
 
 document.getElementById('year').textContent = new Date().getFullYear();
 
+// Marca de agua del catálogo: URL relativa al módulo (correcta en subcarpetas / GitHub Pages)
+const CATALOG_WATERMARK_SRC = new URL('../images/logobackground.svg', import.meta.url).href;
+
 // --- ESTADO DE LA APLICACIÓN ---
 const WHATSAPP_NUMBER = "573003216602"; // Número actualizado
 const tabs = ['inicio', 'catalogo', 'carrito', 'nosotros', 'trabaja', 'contacto'];
@@ -782,10 +785,10 @@ function renderApp() {
 
         html = `
             <div class="relative min-h-[72vh] overflow-hidden py-10 md:py-20">
-                <div class="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden" aria-hidden="true">
-                    <img src="assets/images/logobackground.svg" alt="" class="w-[min(135vmin,980px)] max-w-[98vw] -translate-y-4 object-contain opacity-[0.07] select-none md:-translate-y-8" />
+                <div class="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center overflow-hidden" aria-hidden="true">
+                    <img src="${CATALOG_WATERMARK_SRC}" alt="" width="606" height="682" decoding="async" class="w-[min(120vmin,880px)] max-w-[96vw] -translate-y-2 object-contain opacity-[0.18] select-none md:-translate-y-6" />
                 </div>
-                <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="relative z-[2] max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="text-center mb-16">
                         <h2 class="text-3xl md:text-5xl font-serif text-black mb-5 md:mb-6">Nuestra Colección</h2>
                         <p class="text-zinc-500 max-w-2xl mx-auto">Explora nuestra selección completa de joyas finas. Cada pieza es elegida bajo estrictos estándares de calidad internacional.</p>
