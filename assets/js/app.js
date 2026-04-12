@@ -1,4 +1,4 @@
-﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- CONFIGURACIÓN DE FIREBASE ---
@@ -20,7 +20,7 @@ document.getElementById('year').textContent = new Date().getFullYear();
 const WHATSAPP_NUMBER = "573003216602"; // Número actualizado
 const tabs = ['inicio', 'catalogo', 'carrito', 'nosotros', 'trabaja', 'contacto'];
 const categories = ["Todos", "Cadenas", "Aretes", "Anillos", "Pulseras", "Combos"];
-const materials = ["Todos", "Oro", "Plata"];
+const materials = ["Todos", "Oro laminado", "Plata"];
 const COP_PRICE_FORMATTER = new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
@@ -28,12 +28,12 @@ const COP_PRICE_FORMATTER = new Intl.NumberFormat('es-CO', {
 
 // Guardamos los productos por defecto para poder inicializar la base de datos
 const INITIAL_PRODUCTS = [
-    { name: "Anillo de Compromiso Eternidad", category: "Anillos", material: "Oro", price: 2500000, description: "Anillo de compromiso en oro blanco de 18 quilates con un diamante central corte princesa de 1.5 quilates. Una pieza seleccionada de las mejores casas joyeras del mundo.", image: "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&q=80&w=800", status: "disponible" },
-    { name: "Cadena Lágrima de Zafiro", category: "Cadenas", material: "Plata", price: 1850000, description: "Elegante cadena con un zafiro azul profundo en forma de lágrima, suspendido en oro blanco con detalles en pequeños diamantes.", image: "https://images.unsplash.com/photo-1599643478514-4a4208a650d9?auto=format&fit=crop&q=80&w=800", status: "disponible" },
-    { name: "Pulsera Tenis Diamantes", category: "Pulseras", material: "Plata", price: 3200000, description: "La clásica pulsera tenis, un símbolo de lujo atemporal. Cuenta con una fila continua de diamantes corte brillante montados sobre oro blanco de 18k.", image: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&q=80&w=800", status: "agotado" },
-    { name: "Aretes Perla Cultivada", category: "Aretes", material: "Oro", price: 850000, description: "Sofisticados aretes con perlas cultivadas del Mar del Sur, rematados con un sutil engaste en oro amarillo y un pequeño diamante en la base.", image: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&q=80&w=800", status: "disponible" },
-    { name: "Combo Reloj y Pulsera Onyx", category: "Combos", material: "Oro", price: 5100000, description: "Combo exclusivo de reloj de precisión con esfera de ónix negro y pulsera a juego en oro rosa. Elegancia y puntualidad en un solo conjunto.", image: "https://images.unsplash.com/photo-1524592094714-a5764260bdcb?auto=format&fit=crop&q=80&w=800", status: "disponible" },
-    { name: "Anillo Sello de Oro 24k", category: "Anillos", material: "Oro", price: 1950000, description: "Anillo tipo sello forjado en oro puro de 24 quilates. Un diseño minimalista y rotundo, ideal para personalizar con iniciales.", image: "https://images.unsplash.com/photo-1629224316810-9d8805b95e76?auto=format&fit=crop&q=80&w=800", status: "disponible" }
+    { name: "Anillo de Compromiso Eternidad", category: "Anillos", material: "Oro laminado", price: 2500000, description: "Anillo de compromiso en oro laminado con un diamante central corte princesa de 1.5 quilates. Una pieza seleccionada de las mejores casas joyeras del mundo.", image: "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&q=80&w=800", status: "disponible" },
+    { name: "Cadena Lágrima de Zafiro", category: "Cadenas", material: "Plata", price: 1850000, description: "Elegante cadena con un zafiro azul profundo en forma de lágrima, con montura en oro laminado y detalles en pequeños diamantes.", image: "https://images.unsplash.com/photo-1599643478514-4a4208a650d9?auto=format&fit=crop&q=80&w=800", status: "disponible" },
+    { name: "Pulsera Tenis Diamantes", category: "Pulseras", material: "Plata", price: 3200000, description: "La clásica pulsera tenis, un símbolo de lujo atemporal. Diamantes corte brillante montados sobre base en oro laminado.", image: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&q=80&w=800", status: "agotado" },
+    { name: "Aretes Perla Cultivada", category: "Aretes", material: "Oro laminado", price: 850000, description: "Sofisticados aretes con perlas cultivadas del Mar del Sur, rematados con engaste en oro laminado y un pequeño diamante en la base.", image: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&q=80&w=800", status: "disponible" },
+    { name: "Combo Reloj y Pulsera Onyx", category: "Combos", material: "Oro laminado", price: 5100000, description: "Combo exclusivo de reloj de precisión con esfera de ónix negro y pulsera a juego en oro laminado. Elegancia y puntualidad en un solo conjunto.", image: "https://images.unsplash.com/photo-1524592094714-a5764260bdcb?auto=format&fit=crop&q=80&w=800", status: "disponible" },
+    { name: "Anillo Sello minimalista", category: "Anillos", material: "Oro laminado", price: 1950000, description: "Anillo tipo sello con acabado en oro laminado. Un diseño minimalista y rotundo, ideal para personalizar con iniciales.", image: "https://images.unsplash.com/photo-1629224316810-9d8805b95e76?auto=format&fit=crop&q=80&w=800", status: "disponible" }
 ];
 
 let state = {
@@ -242,7 +242,7 @@ function getProductImages(product) {
 function normalizeProductRecord(product) {
     const normalizedImages = getProductImages(product);
     const parsedPrice = parsePriceToNumber(product?.price);
-    const material = product?.material === 'Plata' ? 'Plata' : 'Oro';
+    const material = product?.material === 'Plata' ? 'Plata' : (product?.material === 'Oro' ? 'Oro laminado' : (product?.material || 'Oro laminado'));
 
     return {
         ...product,
@@ -649,7 +649,8 @@ function renderApp() {
                     <div class="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/80"></div>
                     <div class="relative z-10 text-center px-4 max-w-5xl mx-auto flex flex-col items-center mt-6 md:mt-10">
                         <span class="uppercase tracking-[0.4em] text-xs md:text-sm mb-6 font-semibold text-gold border-b border-gold/30 pb-2">Comercialización Exclusiva</span>
-                        <h2 class="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-serif text-white mb-5 md:mb-6 leading-tight drop-shadow-lg">Elegancia que <br/><span class="italic font-light text-zinc-200">llega a ti</span></h2>
+                        <p class="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-zinc-400 mb-4 md:mb-5 font-medium">Hecho para tu estilo</p>
+                        <h2 class="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-serif text-white mb-5 md:mb-6 leading-tight drop-shadow-lg">Detalles que <br/><span class="italic font-light text-zinc-200">brillan contigo</span></h2>
                         <p class="text-zinc-300 max-w-2xl text-sm sm:text-base md:text-lg font-light mb-8 md:mb-10 drop-shadow-md">Seleccionamos con rigor las piezas más exclusivas del mundo y las llevamos hasta tu puerta con total seguridad y discreción.</p>
                         <button onclick="navigate('catalogo')" class="w-full sm:w-auto px-8 sm:px-12 py-4 sm:py-5 uppercase tracking-widest text-xs font-bold text-white border border-white/40 hover:border-gold hover:bg-gold transition-all duration-500 hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] bg-black/20 backdrop-blur-sm">Explorar Colección</button>
                     </div>
@@ -1087,7 +1088,7 @@ function renderProductCard(product, inCatalog = false) {
     let badges = '';
     if (inCatalog) {
         badges += `<span class="bg-white/90 backdrop-blur-sm px-3 py-1 text-[10px] uppercase tracking-widest font-bold text-zinc-800 w-fit">${product.category}</span>`;
-        badges += `<span class="bg-black/80 backdrop-blur-sm px-3 py-1 text-[10px] uppercase tracking-widest font-bold text-white w-fit">${product.material || 'Oro'}</span>`;
+        badges += `<span class="bg-black/80 backdrop-blur-sm px-3 py-1 text-[10px] uppercase tracking-widest font-bold text-white w-fit">${product.material || 'Oro laminado'}</span>`;
     }
     if (isAgotado) {
         badges += `<span class="bg-black/90 text-white px-3 py-1 text-[10px] uppercase tracking-widest font-bold w-fit ${!inCatalog ? 'absolute top-4 right-4 z-10' : ''}">Agotado</span>`;
@@ -1202,7 +1203,7 @@ function openModal(id) {
                 <div class="w-full md:w-1/2 flex flex-col justify-center md:pt-8">
                     <div class="flex items-center space-x-4 mb-4">
                         <p class="text-sm uppercase tracking-widest text-gold">${product.category}</p>
-                        <p class="text-[11px] uppercase tracking-widest text-zinc-500">${product.material || 'Oro'}</p>
+                        <p class="text-[11px] uppercase tracking-widest text-zinc-500">${product.material || 'Oro laminado'}</p>
                         ${isAgotado ? '<span class="px-2 py-1 bg-zinc-200 text-zinc-600 text-[10px] uppercase tracking-widest font-bold rounded-sm">Sin Stock</span>' : ''}
                     </div>
                     <h2 class="text-3xl md:text-5xl font-serif text-black mb-5 md:mb-6 leading-tight">${product.name}</h2>
