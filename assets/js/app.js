@@ -16,8 +16,8 @@ const db = getFirestore(app);
 
 document.getElementById('year').textContent = new Date().getFullYear();
 
-// Marca de agua del catálogo: URL relativa al módulo (correcta en subcarpetas / GitHub Pages)
-const CATALOG_WATERMARK_SRC = new URL('../images/logobackground.svg', import.meta.url).href;
+// Logo del encabezado del catálogo (misma ruta estable que el resto del sitio)
+const CATALOG_HEADER_LOGO_SRC = new URL('../images/logo.svg', import.meta.url).href;
 
 // --- ESTADO DE LA APLICACIÓN ---
 const WHATSAPP_NUMBER = "573003216602"; // Número actualizado
@@ -784,15 +784,16 @@ function renderApp() {
         let productsHtml = renderCatalogProducts(filtered);
 
         html = `
-            <div class="relative min-h-[72vh] overflow-hidden py-10 md:py-20">
-                <div class="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center overflow-hidden" aria-hidden="true">
-                    <img src="${CATALOG_WATERMARK_SRC}" alt="" width="606" height="682" decoding="async" class="w-[min(120vmin,880px)] max-w-[96vw] -translate-y-2 object-contain opacity-[0.18] select-none md:-translate-y-6" />
-                </div>
-                <div class="relative z-[2] max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div class="text-center mb-16">
-                        <h2 class="text-3xl md:text-5xl font-serif text-black mb-5 md:mb-6">Nuestra Colección</h2>
-                        <p class="text-zinc-500 max-w-2xl mx-auto">Explora nuestra selección completa de joyas finas. Cada pieza es elegida bajo estrictos estándares de calidad internacional.</p>
-                    </div>
+            <div class="py-10 md:py-20">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <header class="mb-14 text-center md:mb-16">
+                        <div class="mb-5 flex justify-center md:mb-6">
+                            <img src="${CATALOG_HEADER_LOGO_SRC}" alt="Gregori Joyería" width="3483" height="430" decoding="async" class="h-9 w-auto max-w-[min(100%,260px)] object-contain object-center sm:max-w-[300px] md:h-11 md:max-w-[340px]" />
+                        </div>
+                        <div class="mx-auto mb-5 h-px w-14 bg-gold/70 md:mb-6" aria-hidden="true"></div>
+                        <h2 class="font-serif text-3xl text-black md:text-5xl mb-4 md:mb-5">Nuestra Colección</h2>
+                        <p class="mx-auto max-w-2xl text-sm text-zinc-500 md:text-base">Explora nuestra selección completa de joyas finas. Cada pieza es elegida bajo estrictos estándares de calidad internacional.</p>
+                    </header>
                     <div class="max-w-5xl mx-auto mb-10">
                         <div class="relative">
                             <i class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-zinc-400"></i>
