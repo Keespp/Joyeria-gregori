@@ -781,8 +781,11 @@ function renderApp() {
         let productsHtml = renderCatalogProducts(filtered);
 
         html = `
-            <div class="py-10 md:py-20">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="relative min-h-[72vh] overflow-hidden py-10 md:py-20">
+                <div class="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden" aria-hidden="true">
+                    <img src="assets/images/logopage.svg" alt="" class="w-[min(135vmin,980px)] max-w-[98vw] -translate-y-4 object-contain opacity-[0.07] select-none md:-translate-y-8" />
+                </div>
+                <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="text-center mb-16">
                         <h2 class="text-3xl md:text-5xl font-serif text-black mb-5 md:mb-6">Nuestra Colección</h2>
                         <p class="text-zinc-500 max-w-2xl mx-auto">Explora nuestra selección completa de joyas finas. Cada pieza es elegida bajo estrictos estándares de calidad internacional.</p>
