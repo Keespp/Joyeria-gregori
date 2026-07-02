@@ -21,7 +21,15 @@ const CATALOG_EMBLEM_SRC = new URL('../images/logobackground.svg', import.meta.u
 
 // --- ESTADO DE LA APLICACIÓN ---
 const WHATSAPP_NUMBER = "573003216602"; // Número actualizado
-const tabs = ['inicio', 'catalogo', 'carrito', 'nosotros', 'trabaja', 'contacto'];
+// Enlaces de texto del menú (carrito y favoritos usan icono propio)
+const NAV_LINKS = ['inicio', 'catalogo', 'nosotros', 'trabaja', 'contacto'];
+const NAV_LABELS = {
+    inicio: 'Inicio',
+    catalogo: 'Catálogo',
+    nosotros: 'Nosotros',
+    trabaja: 'Trabaja con nosotros',
+    contacto: 'Contacto'
+};
 const categories = ["Todos", "Cadenas", "Aretes", "Anillos", "Pulseras", "Combos"];
 const materials = ["Todos", "Oro laminado", "Plata"];
 const COP_PRICE_FORMATTER = new Intl.NumberFormat('es-CO', {
@@ -56,8 +64,38 @@ let state = {
     adminUser: 'Gregori',
     adminPassHash: '', // Se calculará de forma segura al iniciar
     products: [], // Iniciamos vacío, Firebase se encarga de llenarlo en tiempo real
-    cart: []
+    cart: [],
+    wishlist: [] // IDs de productos marcados como favoritos
 };
+
+// --- PERSISTENCIA LOCAL (carrito y favoritos sobreviven a recargas) ---
+const STORAGE_KEYS = { cart: 'gregori.cart', wishlist: 'gregori.wishlist' };
+
+function loadPersistedState() {
+    try {
+        const savedCart = JSON.parse(localStorage.getItem(STORAGE_KEYS.cart) || '[]');
+        if (Array.isArray(savedCart)) {
+            state.cart = savedCart.filter(item => item && item.id && item.quantity > 0);
+        }
+    } catch (error) { /* almacenamiento no disponible o corrupto */ }
+
+    try {
+        const savedWishlist = JSON.parse(localStorage.getItem(STORAGE_KEYS.wishlist) || '[]');
+        if (Array.isArray(savedWishlist)) {
+            state.wishlist = savedWishlist.filter(Boolean);
+        }
+    } catch (error) { /* almacenamiento no disponible o corrupto */ }
+}
+
+function persistCart() {
+    try { localStorage.setItem(STORAGE_KEYS.cart, JSON.stringify(state.cart)); } catch (error) { /* ignorar */ }
+}
+
+function persistWishlist() {
+    try { localStorage.setItem(STORAGE_KEYS.wishlist, JSON.stringify(state.wishlist)); } catch (error) { /* ignorar */ }
+}
+
+loadPersistedState();
 
 // --- SINCRONIZACIÓN CON FIREBASE EN TIEMPO REAL ---
 let isFirstLoad = true;
@@ -81,7 +119,7 @@ onSnapshot(collection(db, "products"), (snapshot) => {
             if (grid) grid.innerHTML = state.products.slice(0, 3).map(p => renderProductCard(p)).join('');
         } else if (state.activeTab === 'catalogo') {
             updateCatalogSearchUI();
-        } else if (state.activeTab === 'carrito') {
+        } else if (state.activeTab === 'carrito' || state.activeTab === 'favoritos') {
             renderApp();
         } else if (state.activeTab === 'admin' && state.isAdminAuthenticated) {
             const tbody = document.getElementById('admin-table-body');
@@ -259,6 +297,73 @@ function normalizeProductRecord(product) {
 function syncCartWithProducts() {
     const productIds = new Set(state.products.map(product => product.id));
     state.cart = state.cart.filter(item => productIds.has(item.id) && item.quantity > 0);
+    state.wishlist = state.wishlist.filter(id => productIds.has(id));
+    persistCart();
+    persistWishlist();
+}
+
+// --- WISHLIST / FAVORITOS ---
+function isInWishlist(productId) {
+    return state.wishlist.includes(productId);
+}
+
+function getWishlistCount() {
+    return state.wishlist.length;
+}
+
+function getWishlistProducts() {
+    return state.wishlist
+        .map(id => state.products.find(product => product.id === id))
+        .filter(Boolean);
+}
+
+function toggleWishlist(productId) {
+    const product = state.products.find(p => p.id === productId);
+    if (!product) return;
+
+    if (isInWishlist(productId)) {
+        state.wishlist = state.wishlist.filter(id => id !== productId);
+        showToast('Se quitó de tus favoritos.', 'info');
+    } else {
+        state.wishlist = [productId, ...state.wishlist];
+        showToast('Se añadió a tus favoritos.', 'success');
+    }
+
+    persistWishlist();
+    renderNav();
+    updateWishlistButtons(productId);
+
+    if (state.activeTab === 'favoritos') renderApp();
+}
+
+// Actualiza el estado visual de los botones de favorito sin re-renderizar toda la vista
+function updateWishlistButtons(productId) {
+    const active = isInWishlist(productId);
+    document.querySelectorAll(`[data-wishlist-id="${CSS.escape(productId)}"]`).forEach(button => {
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        const icon = button.querySelector('i');
+        if (icon) {
+            icon.classList.toggle('fas', active);
+            icon.classList.toggle('far', !active);
+        }
+    });
+}
+
+function renderWishlistButton(product, variant = 'card') {
+    const active = isInWishlist(product.id);
+    const base = variant === 'modal'
+        ? 'h-12 w-12 border border-zinc-300 bg-white/90 hover:border-gold'
+        : 'h-9 w-9 bg-white/90 shadow-sm hover:bg-white';
+    return `
+        <button type="button"
+            onclick="event.stopPropagation(); toggleWishlist('${product.id}')"
+            data-wishlist-id="${escapeHtml(product.id)}"
+            aria-pressed="${active ? 'true' : 'false'}"
+            aria-label="${active ? 'Quitar de favoritos' : 'Añadir a favoritos'}"
+            class="wishlist-btn ${active ? 'is-active' : ''} flex items-center justify-center rounded-full text-zinc-500 transition-all ${base}">
+            <i class="${active ? 'fas' : 'far'} fa-heart text-sm"></i>
+        </button>`;
 }
 
 function getCartCount() {
@@ -285,9 +390,9 @@ function updateFloatingCartFab() {
     el.classList.remove('hidden');
     el.setAttribute('aria-hidden', 'false');
     el.innerHTML = `
-        <button type="button" onclick="navigate('carrito')" class="pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full bg-gold text-white shadow-lg shadow-black/20 transition-transform hover:scale-105 hover:bg-yellow-700 md:h-16 md:w-16" title="Ir al carrito" aria-label="Ir al carrito de compra">
+        <button type="button" onclick="navigate('carrito')" data-cart-target class="pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full bg-gold text-ink shadow-gold transition-transform hover:scale-105 hover:bg-gold-light md:h-16 md:w-16" title="Ir al carrito" aria-label="Ir al carrito de compra">
             <i class="fas fa-cart-shopping text-lg md:text-xl"></i>
-            ${count > 0 ? `<span class="absolute -top-1 -right-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-black px-1.5 text-[11px] font-bold text-white">${count > 99 ? '99+' : count}</span>` : ''}
+            ${count > 0 ? `<span class="cart-count-badge absolute -top-1 -right-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-ink px-1.5 text-[11px] font-bold text-white">${count > 99 ? '99+' : count}</span>` : ''}
         </button>`;
 }
 
@@ -570,48 +675,75 @@ function focusCatalogSearch() {
     });
 }
 
+// --- SCROLL REVEAL (animaciones sutiles al entrar en viewport) ---
+const revealObserver = ('IntersectionObserver' in window)
+    ? new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' })
+    : null;
+
+function applyScrollReveal() {
+    if (!revealObserver) return;
+    requestAnimationFrame(() => {
+        document.querySelectorAll('.reveal:not(.is-visible)').forEach(el => revealObserver.observe(el));
+    });
+}
+
 function renderNav() {
     const deskMenu = document.getElementById('desktop-menu');
     const mobMenu = document.getElementById('mobile-menu-links');
     const mobContainer = document.getElementById('mobile-menu');
     const mobIcon = document.getElementById('mobile-menu-icon');
 
-    // Render Desktop Links
+    const cartCount = getCartCount();
+    const wishlistCount = getWishlistCount();
+
+    // Render Desktop Links (el carrito y favoritos tienen su propio icono)
     let deskHtml = '';
-    tabs.forEach(tab => {
-        const isActive = state.activeTab === tab ? 'text-gold' : 'text-zinc-500';
-        const label = tab === 'trabaja' ? 'trabaja con nosotros' : tab;
-        deskHtml += `<button onclick="navigate('${tab}')" class="uppercase tracking-widest text-xs font-semibold transition-colors duration-300 hover:text-gold ${isActive}">${label}</button>`;
+    NAV_LINKS.forEach(tab => {
+        const isActive = state.activeTab === tab ? 'text-gold-dark' : 'text-zinc-500';
+        deskHtml += `<button onclick="navigate('${tab}')" class="uppercase tracking-wide2 text-xs font-semibold transition-colors duration-300 hover:text-gold-dark ${isActive}">${NAV_LABELS[tab] || tab}</button>`;
     });
 
-    // Botón de búsqueda (Admin eliminado de aquí para mayor discreción)
     deskHtml += `
-        <div class="pl-4 border-l border-zinc-300 flex space-x-4 items-center">
-            <button onclick="navigate('carrito')" title="Carrito" class="relative text-zinc-500 hover:text-black transition-colors" aria-label="Carrito de compra">
-                <i class="fas fa-cart-shopping"></i>
-                ${getCartCount() > 0 ? `<span class="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-gold text-white text-[10px] font-bold flex items-center justify-center">${getCartCount()}</span>` : ''}
-            </button>
-            <button onclick="openSearch()" title="Buscar productos" class="text-zinc-500 hover:text-black transition-colors" aria-label="Buscar productos">
+        <div class="pl-5 border-l border-black/10 flex space-x-4 items-center">
+            <button onclick="openSearch()" title="Buscar productos" class="text-zinc-500 hover:text-gold-dark transition-colors" aria-label="Buscar productos">
                 <i class="fas fa-search"></i>
+            </button>
+            <button onclick="navigate('favoritos')" title="Favoritos" class="relative text-zinc-500 hover:text-gold-dark transition-colors" aria-label="Ver favoritos">
+                <i class="${wishlistCount > 0 ? 'fas' : 'far'} fa-heart"></i>
+                ${wishlistCount > 0 ? `<span class="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-gold-dark text-white text-[10px] font-bold flex items-center justify-center">${wishlistCount}</span>` : ''}
+            </button>
+            <button onclick="navigate('carrito')" title="Carrito" data-cart-target class="relative text-zinc-500 hover:text-gold-dark transition-colors" aria-label="Carrito de compra">
+                <i class="fas fa-cart-shopping"></i>
+                ${cartCount > 0 ? `<span class="cart-count-badge absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-gold-dark text-white text-[10px] font-bold flex items-center justify-center">${cartCount}</span>` : ''}
             </button>
         </div>`;
     deskMenu.innerHTML = deskHtml;
 
     // Render Mobile Links
     let mobHtml = '';
-    tabs.forEach(tab => {
-        const label = tab === 'trabaja' ? 'trabaja con nosotros' : tab;
-        mobHtml += `<button onclick="navigate('${tab}')" class="block w-full text-left px-3 py-4 uppercase tracking-widest text-sm text-zinc-600 hover:bg-zinc-50 hover:text-black border-b border-zinc-100">${label}</button>`;
+    NAV_LINKS.forEach(tab => {
+        const isActive = state.activeTab === tab ? 'text-gold-dark' : 'text-zinc-600';
+        mobHtml += `<button onclick="navigate('${tab}')" class="block w-full text-left px-3 py-4 uppercase tracking-wide2 text-sm ${isActive} hover:bg-cream hover:text-black border-b border-black/5 transition-colors">${NAV_LABELS[tab] || tab}</button>`;
     });
     mobMenu.innerHTML = mobHtml;
 
     // Toggle Mobile menu visibility
+    const menuButton = mobIcon?.closest('button');
     if (state.isMobileMenuOpen) {
         mobContainer.classList.remove('hidden');
         mobIcon.className = 'fas fa-times text-2xl';
+        menuButton?.setAttribute('aria-expanded', 'true');
     } else {
         mobContainer.classList.add('hidden');
         mobIcon.className = 'fas fa-bars text-2xl';
+        menuButton?.setAttribute('aria-expanded', 'false');
     }
 
     updateFloatingCartFab();
@@ -672,137 +804,157 @@ function renderApp() {
     let html = '';
 
     if (state.activeTab === 'inicio') {
+        const heroCategories = [
+            { name: 'Anillos', img: 'https://images.unsplash.com/photo-1631982690223-8aa4be0a2497?q=80&w=764&auto=format&fit=crop' },
+            { name: 'Cadenas', img: 'https://images.unsplash.com/photo-1643236027686-399d6ebbbae0?q=80&w=687&auto=format&fit=crop' },
+            { name: 'Aretes', img: 'https://images.unsplash.com/photo-1617038220319-276d3cfab638?q=80&w=880&auto=format&fit=crop' },
+            { name: 'Pulseras', img: 'https://plus.unsplash.com/premium_photo-1709033404514-c3953af680b4?q=80&w=687&auto=format&fit=crop' }
+        ];
+
+        // Media cinta del marquee (se duplica para lograr el bucle infinito)
+        const marqueeHalf = ['Gregori Joyería', 'Oro laminado', 'Plata fina', 'Envíos asegurados', 'Compra 100% segura', 'Asesoría personalizada']
+            .map(text => `<span class="mx-7 inline-flex items-center gap-7 whitespace-nowrap text-ink uppercase tracking-luxe text-[11px] font-bold"><i class="fas fa-gem text-[9px] opacity-50"></i>${text}</span>`)
+            .join('');
+
         html = `
             <div class="fade-in">
-                <!-- Hero Section -->
-                <div class="relative min-h-[70vh] md:h-[85vh] w-full bg-zinc-900 overflow-hidden flex items-center justify-center">
-                    <img src="https://images.unsplash.com/photo-1602173574767-37ac01994b2a?auto=format&fit=crop&q=80&w=2000" alt="Joyería Fina" class="absolute inset-0 w-full h-full object-cover opacity-60" data-image-label="Gregori Joyeria" data-image-kind="hero" onerror="handleImageError(this)"/>
-                    <div class="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/80"></div>
-                    <div class="relative z-10 text-center px-4 max-w-5xl mx-auto flex flex-col items-center mt-6 md:mt-10">
-                        <span class="uppercase tracking-[0.4em] text-xs md:text-sm mb-6 font-semibold text-gold border-b border-gold/30 pb-2">Comercialización Exclusiva</span>
-                        <h2 class="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-serif text-white mb-5 md:mb-6 leading-tight drop-shadow-lg">Detalles que <br/><span class="italic font-light text-zinc-200">brillan contigo</span></h2>
-                        <p class="text-zinc-300 max-w-2xl text-sm sm:text-base md:text-lg font-light mb-8 md:mb-10 drop-shadow-md">Hecho para tu estilo</p>
-                        <button onclick="navigate('catalogo')" class="w-full sm:w-auto px-8 sm:px-12 py-4 sm:py-5 uppercase tracking-widest text-xs font-bold text-white border border-white/40 hover:border-gold hover:bg-gold transition-all duration-500 hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] bg-black/20 backdrop-blur-sm">Explorar Colección</button>
-                    </div>
-                </div>
-
-                <!-- Banner de Confianza -->
-                <div class="bg-black text-white py-8 border-b border-zinc-800">
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center divide-y md:divide-y-0 md:divide-x divide-zinc-800">
-                            <div class="py-2 md:py-0 flex flex-col items-center justify-center space-y-2">
-                                <i class="fas fa-shield-alt text-gold text-xl mb-1"></i>
-                                <h4 class="uppercase tracking-widest text-[10px] font-bold">Compra Segura</h4>
-                                <p class="text-zinc-400 text-xs font-light">Transacciones 100% protegidas</p>
+                <!-- Hero Section (editorial, asimétrico) -->
+                <section class="relative min-h-[86vh] md:min-h-[92vh] w-full bg-ink overflow-hidden flex items-center">
+                    <img src="https://images.unsplash.com/photo-1602173574767-37ac01994b2a?auto=format&fit=crop&q=80&w=2000" alt="Alta joyería Gregori" fetchpriority="high" decoding="async" class="absolute inset-0 w-full h-full object-cover opacity-45 animate-ken-burns" data-image-label="Gregori Joyeria" data-image-kind="hero" onerror="handleImageError(this)"/>
+                    <div class="absolute inset-0 bg-gradient-to-r from-ink via-ink/75 to-ink/20"></div>
+                    <div class="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/30"></div>
+                    <div class="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+                        <div class="max-w-2xl border-l-2 border-gold/60 pl-6 md:pl-10">
+                            <span class="inline-flex items-center gap-3 uppercase tracking-luxe text-[10px] md:text-xs mb-6 font-semibold text-gold-light">
+                                <i class="fas fa-gem text-[10px]"></i> Alta joyería · 100% digital
+                            </span>
+                            <h1 class="text-5xl sm:text-6xl md:text-7xl xl:text-8xl font-serif text-white mb-6 leading-[1.02]">Detalles que<br/><span class="italic font-light text-gold-light">brillan</span> contigo</h1>
+                            <p class="text-zinc-300 max-w-md text-sm md:text-base font-light mb-9 leading-relaxed">Alta joyería seleccionada pieza por pieza. Elegancia atemporal con acompañamiento experto en cada compra.</p>
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <button onclick="navigate('catalogo')" class="w-full sm:w-auto px-10 py-4 uppercase tracking-wide2 text-xs font-bold text-ink bg-gold hover:bg-gold-light transition-all duration-500 shadow-gold hover:-translate-y-0.5">Explorar Colección</button>
+                                <button onclick="navigate('contacto')" class="w-full sm:w-auto px-10 py-4 uppercase tracking-wide2 text-xs font-bold text-white border border-white/30 hover:border-gold hover:text-gold-light transition-all duration-500 backdrop-blur-sm">Asesoría Personalizada</button>
                             </div>
-                            <div class="py-2 md:py-0 flex flex-col items-center justify-center space-y-2">
-                                <i class="fas fa-gem text-gold text-xl mb-1"></i>
-                                <h4 class="uppercase tracking-widest text-[10px] font-bold">Autenticidad</h4>
-                                <p class="text-zinc-400 text-xs font-light">Piezas certificadas de alta gama</p>
-                            </div>
-                            <div class="py-2 md:py-0 flex flex-col items-center justify-center space-y-2">
-                                <i class="fas fa-box-open text-gold text-xl mb-1"></i>
-                                <h4 class="uppercase tracking-widest text-[10px] font-bold">Envíos Asegurados</h4>
-                                <p class="text-zinc-400 text-xs font-light">Cobertura total a nivel nacional</p>
+                            <div class="mt-12 pt-8 border-t border-white/10 flex flex-wrap gap-8 md:gap-14">
+                                <div><p class="font-serif text-3xl md:text-4xl text-gold">${state.products.length || '···'}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1.5">Piezas exclusivas</p></div>
+                                <div><p class="font-serif text-3xl md:text-4xl text-gold">${categories.length - 1}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1.5">Categorías</p></div>
+                                <div><p class="font-serif text-3xl md:text-4xl text-gold">24/7</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1.5">Atención digital</p></div>
                             </div>
                         </div>
                     </div>
+                </section>
+
+                <!-- Cinta marquee dorada -->
+                <div class="marquee bg-gold border-y border-gold-dark/30 py-3.5 select-none" aria-hidden="true">
+                    <div class="marquee-track">${marqueeHalf}${marqueeHalf}</div>
                 </div>
 
                 <!-- Categorías Destacadas -->
-                <div class="py-14 md:py-20 bg-zinc-50 border-b border-zinc-200">
+                <section class="py-16 md:py-24 bg-ivory">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <div class="relative aspect-[4/5] group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Anillos'); navigate('catalogo')">
-                                <img src="https://images.unsplash.com/photo-1631982690223-8aa4be0a2497?q=80&w=764&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Anillos">
-                                <div class="absolute inset-0 bg-black/35 group-hover:bg-black/55 transition-colors duration-500"></div>
-                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                                    <h3 class="text-3xl font-serif text-white mb-3">Anillos</h3>
-                                    <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">Ver colección</span>
-                                </div>
-                            </div>
-                            <div class="relative aspect-[4/5] group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Cadenas'); navigate('catalogo')">
-                                <img src="https://images.unsplash.com/photo-1643236027686-399d6ebbbae0?q=80&w=687&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Cadenas">
-                                <div class="absolute inset-0 bg-black/35 group-hover:bg-black/55 transition-colors duration-500"></div>
-                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                                    <h3 class="text-3xl font-serif text-white mb-3">Cadenas</h3>
-                                    <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">Ver colección</span>
-                                </div>
-                            </div>
-                            <div class="relative aspect-[4/5] group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Aretes'); navigate('catalogo')">
-                                <img src="https://images.unsplash.com/photo-1617038220319-276d3cfab638?q=80&w=880&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Aretes">
-                                <div class="absolute inset-0 bg-black/35 group-hover:bg-black/55 transition-colors duration-500"></div>
-                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                                    <h3 class="text-3xl font-serif text-white mb-3">Aretes</h3>
-                                    <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">Ver colección</span>
-                                </div>
-                            </div>
-                            <div class="relative aspect-[4/5] group cursor-pointer overflow-hidden bg-zinc-200" onclick="setFilter('Pulseras'); navigate('catalogo')">
-                                <img src="https://plus.unsplash.com/premium_photo-1709033404514-c3953af680b4?q=80&w=687&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Pulseras">
-                                <div class="absolute inset-0 bg-black/35 group-hover:bg-black/55 transition-colors duration-500"></div>
-                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                                    <h3 class="text-3xl font-serif text-white mb-3">Pulseras</h3>
-                                    <span class="uppercase tracking-widest text-xs text-white border-b border-gold pb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">Ver colección</span>
-                                </div>
-                            </div>
+                        <div class="reveal text-center mb-12 md:mb-16">
+                            <p class="uppercase tracking-luxe text-[11px] font-bold text-gold-dark mb-4">Nuestras Colecciones</p>
+                            <h2 class="text-3xl md:text-5xl font-serif text-ink">Explora por categoría</h2>
+                        </div>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                            ${heroCategories.map((cat, i) => `
+                                <button type="button" onclick="setFilter('${cat.name}'); navigate('catalogo')" class="reveal reveal-delay-${i + 1} relative aspect-[4/5] group overflow-hidden bg-sand rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-dark">
+                                    <img src="${cat.img}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-110" alt="${cat.name}">
+                                    <div class="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/20 to-transparent group-hover:from-ink/90 transition-colors duration-500"></div>
+                                    <div class="absolute inset-x-0 bottom-0 flex flex-col items-center text-center p-5">
+                                        <h3 class="text-2xl md:text-3xl font-serif text-white mb-2">${cat.name}</h3>
+                                        <span class="uppercase tracking-wide2 text-[10px] text-gold-light border-b border-gold/60 pb-1 opacity-80 group-hover:opacity-100 transition-opacity duration-500">Ver colección</span>
+                                    </div>
+                                </button>
+                            `).join('')}
                         </div>
                     </div>
-                </div>
+                </section>
 
                 <!-- Destacados -->
-                <div class="py-16 md:py-24 bg-white">
+                <section class="py-16 md:py-24 bg-white border-y border-black/5">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                        <div class="flex flex-col items-center justify-center mb-16">
-                            <i class="fas fa-gem text-gold text-2xl mb-4 opacity-50"></i>
-                            <h3 class="text-3xl md:text-5xl font-serif text-black mb-4">Piezas Destacadas</h3>
-                            <div class="w-20 h-[1px] bg-gold"></div>
+                        <div class="reveal flex flex-col items-center justify-center mb-14 md:mb-16">
+                            <i class="fas fa-gem text-gold text-xl mb-4"></i>
+                            <p class="uppercase tracking-luxe text-[11px] font-bold text-gold-dark mb-3">Selección del mes</p>
+                            <h2 class="text-3xl md:text-5xl font-serif text-ink mb-5">Piezas Destacadas</h2>
+                            <div class="gold-rule w-24"></div>
                         </div>
-                        <div id="inicio-destacados-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10">
-                            ${state.products.slice(0, 3).map(p => renderProductCard(p)).join('')}
+                        <div id="inicio-destacados-grid" class="grid grid-cols-2 lg:grid-cols-3 gap-5 md:gap-10 text-left">
+                            ${state.products.slice(0, 3).map((p, i) => `<div class="reveal reveal-delay-${i + 1}">${renderProductCard(p)}</div>`).join('') || renderFeaturedPlaceholder()}
                         </div>
-                        <div class="mt-20">
-                            <button onclick="navigate('catalogo')" class="inline-flex items-center space-x-3 text-black border border-black px-8 py-4 hover:bg-black hover:text-white transition-colors duration-300 uppercase tracking-widest text-sm font-bold">
-                                <span>Ver toda la colección</span> <i class="fas fa-chevron-right text-xs"></i>
+                        <div class="mt-16 md:mt-20">
+                            <button onclick="navigate('catalogo')" class="group inline-flex items-center space-x-3 text-ink border border-ink px-9 py-4 hover:bg-ink hover:text-white transition-colors duration-300 uppercase tracking-wide2 text-xs font-bold">
+                                <span>Ver toda la colección</span> <i class="fas fa-arrow-right text-xs transition-transform group-hover:translate-x-1"></i>
                             </button>
                         </div>
                     </div>
-                </div>
+                </section>
+
+                <!-- Marca / Filosofía -->
+                <section class="py-16 md:py-28 bg-cream overflow-hidden">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+                            <div class="reveal w-full lg:w-1/2 relative">
+                                <div class="aspect-[4/5] max-h-[560px] overflow-hidden rounded-lg shadow-luxe">
+                                    <img src="assets/images/Nosotrosimg.png" loading="lazy" decoding="async" alt="Curaduría Gregori Joyería" class="w-full h-full object-cover" onerror="handleImageError(this)"/>
+                                </div>
+                                <div class="hidden md:block absolute -bottom-6 -right-6 bg-ink text-white px-8 py-6 rounded-lg shadow-luxe">
+                                    <p class="font-serif text-3xl text-gold">100%</p>
+                                    <p class="uppercase tracking-wide2 text-[10px] text-zinc-300 mt-1">Servicio personalizado</p>
+                                </div>
+                            </div>
+                            <div class="reveal reveal-delay-1 w-full lg:w-1/2">
+                                <p class="uppercase tracking-luxe text-[11px] font-bold text-gold-dark mb-5">Nuestra Filosofía</p>
+                                <h2 class="text-3xl md:text-5xl font-serif text-ink leading-tight mb-6">Alta joyería con respaldo y exclusividad</h2>
+                                <p class="text-zinc-600 font-light leading-relaxed mb-5">En <strong class="font-medium text-ink">Gregori Joyería</strong> seleccionamos cada pieza bajo estrictos estándares de calidad, para clientes que valoran la elegancia, la distinción y la confianza en cada compra.</p>
+                                <p class="text-zinc-600 font-light leading-relaxed mb-8">Acercamos la alta joyería a todo el país con atención directa, acompañamiento experto y un proceso de compra seguro.</p>
+                                <button onclick="navigate('nosotros')" class="inline-flex items-center gap-3 text-ink font-bold uppercase tracking-wide2 text-xs border-b-2 border-gold pb-1 hover:text-gold-dark transition-colors">Conoce nuestra historia <i class="fas fa-arrow-right text-xs"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Banda CTA -->
+                <section class="relative py-20 md:py-28 bg-ink overflow-hidden">
+                    <div class="relative z-10 max-w-3xl mx-auto px-4 text-center reveal">
+                        <i class="fab fa-whatsapp text-gold text-3xl mb-6"></i>
+                        <h2 class="text-3xl md:text-5xl font-serif text-white mb-5">¿Buscas una pieza especial?</h2>
+                        <p class="text-zinc-400 font-light mb-10 max-w-xl mx-auto">Nuestros asesores te acompañan para encontrar la joya perfecta. Escríbenos y recibe atención inmediata y personalizada.</p>
+                        <button onclick="window.open('https://wa.me/${WHATSAPP_NUMBER}', '_blank')" class="inline-flex items-center gap-3 px-10 py-4 bg-gold text-ink uppercase tracking-wide2 text-xs font-bold hover:bg-gold-light transition-colors shadow-gold">
+                            <i class="fab fa-whatsapp text-lg"></i> Hablar con un asesor
+                        </button>
+                    </div>
+                </section>
             </div>`;
     }
     else if (state.activeTab === 'catalogo') {
         const filtered = getCatalogFilteredProducts();
 
         let filtersHtml = categories.map(cat => {
-            const isActive = state.filter === cat ? 'bg-gold text-white shadow-md' : 'bg-white text-zinc-500 border border-zinc-200 hover:border-zinc-400 hover:text-black';
-            return `<button onclick="setFilter('${cat}')" class="px-6 py-2 rounded-full uppercase tracking-widest text-xs font-semibold transition-all duration-300 ${isActive}">${cat}</button>`;
+            const isActive = state.filter === cat ? 'bg-gold-dark text-white border-gold-dark shadow-sm' : 'bg-white text-zinc-500 border-zinc-200 hover:border-gold-dark hover:text-gold-dark';
+            return `<button onclick="setFilter('${cat}')" class="px-5 py-2 rounded-full border uppercase tracking-wide2 text-[11px] font-semibold transition-all duration-300 ${isActive}">${cat}</button>`;
         }).join('');
         const materialFiltersHtml = materials.map(material => {
-            const isActive = state.materialFilter === material ? 'bg-black text-white shadow-md' : 'bg-white text-zinc-500 border border-zinc-200 hover:border-zinc-400 hover:text-black';
-            return `<button onclick="setMaterialFilter('${material}')" class="px-5 py-2 rounded-full uppercase tracking-widest text-xs font-semibold transition-all duration-300 ${isActive}">${material}</button>`;
+            const isActive = state.materialFilter === material ? 'bg-ink text-white border-ink shadow-sm' : 'bg-white text-zinc-500 border-zinc-200 hover:border-ink hover:text-ink';
+            return `<button onclick="setMaterialFilter('${material}')" class="px-5 py-2 rounded-full border uppercase tracking-wide2 text-[11px] font-semibold transition-all duration-300 ${isActive}">${material}</button>`;
         }).join('');
 
         let productsHtml = renderCatalogProducts(filtered);
 
         html = `
-            <div class="py-10 md:py-20">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <header class="mb-14 text-center md:mb-16">
-                        <div class="mb-7 flex flex-col items-center md:mb-9">
-                            <div class="relative">
-                                <div class="absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-gold/15 via-transparent to-zinc-200/30 blur-md md:-inset-4 md:rounded-[2.25rem]" aria-hidden="true"></div>
-                                <div class="relative rounded-[1.65rem] border border-zinc-200/90 bg-white p-6 shadow-[0_4px_28px_-6px_rgba(0,0,0,0.1)] ring-1 ring-black/[0.03] md:rounded-[1.85rem] md:p-8">
-                                    <img src="${CATALOG_EMBLEM_SRC}" alt="Gregori Joyería" width="606" height="682" decoding="async" class="mx-auto h-[5.5rem] w-auto object-contain sm:h-24 md:h-[6.5rem]" />
-                                </div>
-                            </div>
-                            <div class="mt-6 flex w-full max-w-[11rem] items-center gap-3 md:mt-7 md:max-w-[13rem]" aria-hidden="true">
-                                <span class="h-px flex-1 bg-gradient-to-r from-transparent to-zinc-300/90"></span>
-                                <span class="h-1 w-1 shrink-0 rounded-full bg-gold shadow-sm shadow-gold/40"></span>
-                                <span class="h-px flex-1 bg-gradient-to-l from-transparent to-zinc-300/90"></span>
-                            </div>
-                        </div>
-                        <h2 class="mb-4 font-serif text-3xl text-black md:mb-5 md:text-5xl">Nuestra Colección</h2>
-                        <p class="mx-auto max-w-2xl text-sm text-zinc-500 md:text-base">Explora nuestra selección completa de joyas finas. Cada pieza es elegida bajo estrictos estándares de calidad internacional.</p>
-                    </header>
+            <div class="fade-in">
+                <!-- Encabezado editorial oscuro -->
+                <section class="relative bg-ink overflow-hidden">
+                    <div class="absolute inset-0 opacity-[0.06] bg-[radial-gradient(circle_at_top_right,_var(--gold),_transparent_55%)]" aria-hidden="true"></div>
+                    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 text-center">
+                        <img src="${CATALOG_EMBLEM_SRC}" alt="Gregori Joyería" width="606" height="682" decoding="async" class="mx-auto h-16 md:h-20 w-auto object-contain mb-6 opacity-90 [filter:brightness(0)_invert(1)]" />
+                        <p class="uppercase tracking-luxe text-[11px] font-bold text-gold-light mb-4">Alta joyería digital</p>
+                        <h1 class="font-serif text-4xl md:text-6xl text-white mb-5">Nuestra Colección</h1>
+                        <p class="mx-auto max-w-2xl text-sm md:text-base text-zinc-400 font-light">Explora nuestra selección completa de joyas finas. Cada pieza es elegida bajo estrictos estándares de calidad internacional.</p>
+                    </div>
+                </section>
+
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
                     <div class="max-w-5xl mx-auto mb-10">
                         <div class="relative">
                             <i class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-zinc-400"></i>
@@ -812,44 +964,45 @@ function renderApp() {
                                 value="${escapeHtml(state.searchQuery)}"
                                 oninput="setSearchQuery(this.value, this.selectionStart)"
                                 placeholder="Busca por nombre, categoría o descripción"
-                                class="w-full rounded-full border border-zinc-200 bg-white py-4 pl-14 pr-14 text-sm text-zinc-700 placeholder:text-zinc-400 shadow-sm transition-all focus:border-gold focus:outline-none focus:ring-4 focus:ring-yellow-100"
+                                aria-label="Buscar en el catálogo"
+                                class="w-full rounded-full border border-zinc-200 bg-white py-4 pl-14 pr-14 text-sm text-zinc-700 placeholder:text-zinc-400 shadow-sm transition-all focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50"
                                 autocomplete="off"
                             />
                             <div id="catalog-clear-button">${renderClearSearchButton()}</div>
                         </div>
                         <div class="mt-4 flex justify-center md:justify-end">
-                            <label class="flex w-full max-w-xs items-center gap-3 rounded-full border border-zinc-200 bg-white px-5 py-4 text-xs uppercase tracking-widest text-zinc-400 shadow-sm">
+                            <label class="flex w-full max-w-xs items-center gap-3 rounded-full border border-zinc-200 bg-white px-5 py-3.5 text-xs uppercase tracking-wide2 text-zinc-400 shadow-sm">
                                 <i class="fas fa-arrow-down-wide-short text-zinc-400"></i>
                                 <span class="shrink-0 font-semibold">Ordenar</span>
-                                <select id="catalog-sort" onchange="setSortOrder(this.value)" class="w-full bg-transparent text-right text-xs font-semibold uppercase tracking-widest text-zinc-700 outline-none">
+                                <select id="catalog-sort" onchange="setSortOrder(this.value)" aria-label="Ordenar productos" class="w-full bg-transparent text-right text-xs font-semibold uppercase tracking-wide2 text-zinc-700 outline-none cursor-pointer">
                                     <option value="recent" ${state.sortOrder === 'recent' ? 'selected' : ''}>Recientes</option>
                                     <option value="price-asc" ${state.sortOrder === 'price-asc' ? 'selected' : ''}>Menor a mayor precio</option>
                                     <option value="price-desc" ${state.sortOrder === 'price-desc' ? 'selected' : ''}>Mayor a menor precio</option>
                                 </select>
                             </label>
                         </div>
-                        <p id="catalog-results-label" class="mt-4 text-center text-xs uppercase tracking-widest text-zinc-400">${escapeHtml(getCatalogResultsLabel(filtered))}</p>
+                        <p id="catalog-results-label" class="mt-4 text-center text-xs uppercase tracking-wide2 text-zinc-400">${escapeHtml(getCatalogResultsLabel(filtered))}</p>
                     </div>
                     <div class="mb-6">
-                        <p class="mb-3 text-center text-[11px] uppercase tracking-[0.2em] text-zinc-400">Categoría</p>
-                        <div class="flex flex-wrap justify-center gap-4">${filtersHtml}</div>
+                        <p class="mb-3 text-center text-[10px] uppercase tracking-luxe text-zinc-400">Categoría</p>
+                        <div class="flex flex-wrap justify-center gap-3">${filtersHtml}</div>
                     </div>
-                    <div class="mb-16">
-                        <p class="mb-3 text-center text-[11px] uppercase tracking-[0.2em] text-zinc-400">Material</p>
+                    <div class="mb-14">
+                        <p class="mb-3 text-center text-[10px] uppercase tracking-luxe text-zinc-400">Material</p>
                         <div class="flex flex-wrap justify-center gap-3">${materialFiltersHtml}</div>
                     </div>
-                    <div id="catalog-products-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 md:gap-8">${productsHtml}</div>
+                    <div id="catalog-products-grid" class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">${productsHtml}</div>
                 </div>
             </div>`;
     }
     else if (state.activeTab === 'carrito') {
         const cartItems = getCartDetailedItems();
         html = `
-            <div class="py-10 md:py-20 bg-zinc-50 min-h-[70vh]">
+            <div class="py-10 md:py-20 bg-ivory min-h-[70vh] fade-in">
                 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                         <div>
-                            <h2 class="text-3xl md:text-5xl font-serif text-black">Carrito de compra</h2>
+                            <h2 class="text-3xl md:text-5xl font-serif text-ink">Carrito de compra</h2>
                             <p class="mt-3 text-zinc-500">Agrega varios productos y envía un solo pedido por WhatsApp.</p>
                         </div>
                         ${cartItems.length ? `<button onclick="clearCart()" class="w-fit rounded-full border border-zinc-300 px-5 py-2 text-xs font-bold uppercase tracking-widest text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-black">Vaciar carrito</button>` : ''}
@@ -883,15 +1036,15 @@ function renderApp() {
                                 <p class="text-sm uppercase tracking-widest text-zinc-500">Total estimado</p>
                                 <p class="text-2xl font-serif text-black">${formatPriceCOP(getCartTotal())}</p>
                             </div>
-                            <button onclick="checkoutCartWhatsApp()" class="mt-6 w-full rounded-full bg-gold px-8 py-4 text-sm font-bold uppercase tracking-widest text-white transition-colors hover:bg-yellow-700">
-                                Enviar pedido por WhatsApp
+                            <button onclick="checkoutCartWhatsApp()" class="mt-6 w-full flex items-center justify-center gap-3 rounded-full bg-gold px-8 py-4 text-sm font-bold uppercase tracking-wide2 text-ink transition-colors hover:bg-gold-light shadow-gold">
+                                <i class="fab fa-whatsapp text-lg"></i> Enviar pedido por WhatsApp
                             </button>
                         </div>
                     ` : `
                         <div class="rounded-2xl border border-dashed border-zinc-300 bg-white p-14 text-center">
                             <i class="fas fa-cart-shopping text-4xl text-zinc-300"></i>
                             <p class="mt-6 text-lg text-zinc-500">Tu carrito está vacío.</p>
-                            <button onclick="navigate('catalogo')" class="mt-8 rounded-full border border-black px-7 py-3 text-xs font-bold uppercase tracking-widest text-black transition-colors hover:bg-black hover:text-white">
+                            <button onclick="navigate('catalogo')" class="mt-8 rounded-full border border-ink px-7 py-3 text-xs font-bold uppercase tracking-wide2 text-ink transition-colors hover:bg-ink hover:text-white">
                                 Ir al catálogo
                             </button>
                         </div>
@@ -901,21 +1054,32 @@ function renderApp() {
     }
     else if (state.activeTab === 'nosotros') {
         html = `
-            <div class="py-12 md:py-20 fade-in bg-white">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div class="flex flex-col lg:flex-row gap-16 items-center">
-                        <div class="w-full lg:w-1/2 relative h-[360px] sm:h-[460px] lg:h-[600px] overflow-hidden">
-                            <img src="assets/images/Nosotrosimg.png" alt="Curaduría"
-                                class="w-full h-full object-cover object-center scale-110"
-                                 onerror="handleImageError(this)"/>
-                        </div>
-                        <div class="w-full lg:w-1/2 lg:pl-10">
-                            <span class="uppercase tracking-[0.2em] text-xs font-bold mb-4 block text-gold">Nuestra Filosofía</span>
-                            <h2 class="text-3xl md:text-5xl font-serif text-black mb-6 md:mb-8 leading-tight">Alta Joyería con<br/>respaldo y exclusividad</h2>
-                            <div class="space-y-6 text-zinc-600 font-light leading-relaxed">
-                                <p>En <strong>Gregori Joyería</strong> somos una joyería especializada en la comercialización de piezas exclusivas, pensadas para clientes que valoran la elegancia, la distinción y la confianza en cada compra.</p>
-                                <p>Brindamos una experiencia <strong>100% </strong>personalizada, acercando alta joyería a todo el país con atención directa, acompañamiento experto y un proceso de compra seguro.</p>
-                                <p>Cada joya de nuestro catálogo representa calidad, diseño y prestigio, respaldada por un servicio serio y una presentación a la altura de una marca de lujo.</p>
+            <div class="fade-in">
+                <section class="bg-ink text-center py-16 md:py-20 px-4">
+                    <p class="uppercase tracking-luxe text-[11px] font-bold text-gold-light mb-4">Nuestra Historia</p>
+                    <h1 class="text-4xl md:text-6xl font-serif text-white">Sobre Gregori Joyería</h1>
+                </section>
+                <div class="py-14 md:py-24 bg-white">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex flex-col lg:flex-row gap-12 lg:gap-20 items-center">
+                            <div class="reveal w-full lg:w-1/2 relative h-[360px] sm:h-[460px] lg:h-[600px] overflow-hidden rounded-lg shadow-luxe">
+                                <img src="assets/images/Nosotrosimg.png" alt="Curaduría Gregori Joyería" loading="lazy" decoding="async"
+                                    class="w-full h-full object-cover object-center scale-105 hover:scale-110 transition-transform duration-[1200ms]"
+                                     onerror="handleImageError(this)"/>
+                            </div>
+                            <div class="reveal reveal-delay-1 w-full lg:w-1/2">
+                                <span class="uppercase tracking-luxe text-[11px] font-bold mb-5 block text-gold-dark">Nuestra Filosofía</span>
+                                <h2 class="text-3xl md:text-5xl font-serif text-ink mb-6 md:mb-8 leading-tight">Alta joyería con<br/>respaldo y exclusividad</h2>
+                                <div class="space-y-6 text-zinc-600 font-light leading-relaxed">
+                                    <p>En <strong class="font-medium text-ink">Gregori Joyería</strong> somos una joyería especializada en la comercialización de piezas exclusivas, pensadas para clientes que valoran la elegancia, la distinción y la confianza en cada compra.</p>
+                                    <p>Brindamos una experiencia <strong class="font-medium text-ink">100%</strong> personalizada, acercando alta joyería a todo el país con atención directa, acompañamiento experto y un proceso de compra seguro.</p>
+                                    <p>Cada joya de nuestro catálogo representa calidad, diseño y prestigio, respaldada por un servicio serio y una presentación a la altura de una marca de lujo.</p>
+                                </div>
+                                <div class="mt-10 grid grid-cols-3 gap-4 border-t border-black/5 pt-8">
+                                    <div><p class="font-serif text-3xl text-gold-dark">100%</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-500 mt-1">Digital</p></div>
+                                    <div><p class="font-serif text-3xl text-gold-dark">★★★★★</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-500 mt-1">Servicio</p></div>
+                                    <div><p class="font-serif text-3xl text-gold-dark">CO</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-500 mt-1">Envíos país</p></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -924,36 +1088,39 @@ function renderApp() {
     }
     else if (state.activeTab === 'trabaja') {
         html = `
-            <div class="py-12 md:py-20 fade-in bg-zinc-900 text-white">
+            <div class="py-16 md:py-24 fade-in bg-ink text-white">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div class="text-center mb-16">
-                        <i class="fas fa-briefcase text-4xl mb-6 text-gold"></i>
-                        <h2 class="text-3xl md:text-5xl font-serif mb-6">Únete a Nuestro Equipo</h2>
-                        <p class="text-zinc-400 max-w-2xl mx-auto text-lg font-light">Buscamos talento apasionado por el lujo para comercializar nuestras colecciones exclusivas.</p>
+                    <div class="reveal text-center mb-14 md:mb-16">
+                        <i class="fas fa-briefcase text-3xl mb-6 text-gold"></i>
+                        <p class="uppercase tracking-luxe text-[11px] font-bold text-gold-light mb-4">Únete al equipo</p>
+                        <h1 class="text-3xl md:text-5xl font-serif mb-6">Trabaja con nosotros</h1>
+                        <p class="text-zinc-400 max-w-2xl mx-auto md:text-lg font-light">Buscamos talento apasionado por el lujo para comercializar nuestras colecciones exclusivas.</p>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-12 mt-16">
-                        <div class="bg-zinc-800/50 p-10 border border-zinc-700 hover:border-gold transition-colors">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
+                        <div class="reveal rounded-2xl bg-white/[0.04] p-8 md:p-10 border border-white/10 hover:border-gold/50 transition-colors">
+                            <div class="w-12 h-12 rounded-full bg-gold/15 flex items-center justify-center text-gold mb-6"><i class="fas fa-user-tie"></i></div>
                             <h3 class="text-2xl font-serif mb-4">Asesores de Ventas Digitales</h3>
                             <p class="text-zinc-400 mb-6 font-light">Maneja tu propio tiempo ofreciendo nuestro catálogo a clientes de alto perfil con atractivas comisiones.</p>
-                            <ul class="space-y-2 mb-8 text-sm text-zinc-300">
-                                <li>✓ Comisiones desde el primer mes.</li>
-                                <li>✓ Trabajo 100% remoto.</li>
-                                <li>✓ Capacitación en alta joyería.</li>
+                            <ul class="space-y-3 text-sm text-zinc-300">
+                                <li class="flex items-center gap-3"><i class="fas fa-check text-gold text-xs"></i> Comisiones desde el primer mes.</li>
+                                <li class="flex items-center gap-3"><i class="fas fa-check text-gold text-xs"></i> Trabajo 100% remoto.</li>
+                                <li class="flex items-center gap-3"><i class="fas fa-check text-gold text-xs"></i> Capacitación en alta joyería.</li>
                             </ul>
                         </div>
-                        <div class="bg-zinc-800/50 p-10 border border-zinc-700 hover:border-gold transition-colors">
+                        <div class="reveal reveal-delay-1 rounded-2xl bg-white/[0.04] p-8 md:p-10 border border-white/10 hover:border-gold/50 transition-colors">
+                            <div class="w-12 h-12 rounded-full bg-gold/15 flex items-center justify-center text-gold mb-6"><i class="fas fa-star"></i></div>
                             <h3 class="text-2xl font-serif mb-4">Embajadores de Marca</h3>
                             <p class="text-zinc-400 mb-6 font-light">¿Tienes una audiencia alineada con el lujo? Conviértete en embajador y promociona nuestras piezas.</p>
-                            <ul class="space-y-2 mb-8 text-sm text-zinc-300">
-                                <li>✓ Códigos de descuento personalizados.</li>
-                                <li>✓ Beneficios por volumen de referidos.</li>
-                                <li>✓ Posibilidad de recibir piezas para contenido.</li>
+                            <ul class="space-y-3 text-sm text-zinc-300">
+                                <li class="flex items-center gap-3"><i class="fas fa-check text-gold text-xs"></i> Códigos de descuento personalizados.</li>
+                                <li class="flex items-center gap-3"><i class="fas fa-check text-gold text-xs"></i> Beneficios por volumen de referidos.</li>
+                                <li class="flex items-center gap-3"><i class="fas fa-check text-gold text-xs"></i> Posibilidad de recibir piezas para contenido.</li>
                             </ul>
                         </div>
                     </div>
-                    <div class="mt-16 text-center">
-                        <button onclick="openWorkWithUsWhatsApp()" class="px-10 py-4 uppercase tracking-widest text-sm font-bold text-zinc-900 bg-gold hover:bg-yellow-600 transition-colors inline-flex items-center space-x-2">
-                            <i class="fab fa-whatsapp"></i> <span>Enviar Propuesta / CV por WhatsApp</span>
+                    <div class="mt-14 text-center reveal">
+                        <button onclick="openWorkWithUsWhatsApp()" class="px-10 py-4 uppercase tracking-wide2 text-xs font-bold text-ink bg-gold hover:bg-gold-light transition-colors inline-flex items-center gap-3 shadow-gold">
+                            <i class="fab fa-whatsapp text-lg"></i> <span>Enviar propuesta / CV por WhatsApp</span>
                         </button>
                     </div>
                 </div>
@@ -961,133 +1128,251 @@ function renderApp() {
     }
     else if (state.activeTab === 'contacto') {
         html = `
-            <div class="py-12 md:py-20 fade-in bg-zinc-50">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div class="text-center mb-16">
-                        <h2 class="text-4xl font-serif text-black mb-4">Asesoría Personalizada</h2>
-                        <p class="text-zinc-500 max-w-2xl mx-auto">Nuestra operación es en línea, lo que nos permite dedicarte el tiempo que mereces desde tu hogar.</p>
+            <div class="fade-in">
+                <section class="bg-ink text-center py-16 md:py-20 px-4">
+                    <p class="uppercase tracking-luxe text-[11px] font-bold text-gold-light mb-4">Estamos para ti</p>
+                    <h1 class="text-4xl md:text-6xl font-serif text-white mb-5">Asesoría Personalizada</h1>
+                    <p class="text-zinc-400 max-w-2xl mx-auto font-light">Nuestra operación es 100% en línea, lo que nos permite dedicarte el tiempo que mereces desde tu hogar.</p>
+                </section>
+
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 md:py-20">
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-10 lg:gap-16">
+                        <!-- Formulario -->
+                        <div class="reveal lg:col-span-3 bg-white rounded-2xl border border-black/5 shadow-luxe-sm p-6 md:p-10">
+                            <h2 class="font-serif text-2xl md:text-3xl text-ink mb-2">Escríbenos</h2>
+                            <p class="text-zinc-500 text-sm mb-8">Completa el formulario y te contactaremos por WhatsApp. También puedes enviarlo directamente desde aquí.</p>
+                            <form onsubmit="handleContactForm(event)" class="space-y-5">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                    <div>
+                                        <label for="contact-name" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-2">Nombre</label>
+                                        <input required id="contact-name" type="text" autocomplete="name" class="w-full rounded-lg border border-zinc-300 p-3 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" />
+                                    </div>
+                                    <div>
+                                        <label for="contact-phone" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-2">Teléfono / WhatsApp</label>
+                                        <input required id="contact-phone" type="tel" inputmode="tel" autocomplete="tel" class="w-full rounded-lg border border-zinc-300 p-3 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="contact-interest" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-2">¿En qué te interesa?</label>
+                                    <select id="contact-interest" class="w-full rounded-lg border border-zinc-300 p-3 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all cursor-pointer">
+                                        <option>Información general</option>
+                                        <option>Anillos</option>
+                                        <option>Cadenas</option>
+                                        <option>Aretes</option>
+                                        <option>Pulseras</option>
+                                        <option>Combos</option>
+                                        <option>Asesoría / Videollamada</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="contact-message" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-2">Mensaje</label>
+                                    <textarea required id="contact-message" rows="4" placeholder="Cuéntanos qué buscas..." class="w-full rounded-lg border border-zinc-300 p-3 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all"></textarea>
+                                </div>
+                                <button type="submit" class="w-full flex items-center justify-center gap-3 rounded-full bg-gold px-8 py-4 text-sm font-bold uppercase tracking-wide2 text-ink transition-colors hover:bg-gold-light shadow-gold">
+                                    <i class="fab fa-whatsapp text-lg"></i> Enviar por WhatsApp
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Información -->
+                        <div class="reveal reveal-delay-1 lg:col-span-2 space-y-5">
+                            <a href="https://wa.me/${WHATSAPP_NUMBER}" target="_blank" rel="noopener noreferrer" class="flex items-start gap-4 rounded-2xl border border-black/5 bg-white p-6 shadow-luxe-sm transition-all hover:border-gold/50 hover:-translate-y-0.5">
+                                <div class="w-12 h-12 shrink-0 rounded-full bg-gold-50 flex items-center justify-center text-gold-dark text-xl"><i class="fab fa-whatsapp"></i></div>
+                                <div>
+                                    <h3 class="font-serif text-lg text-ink">WhatsApp Inmediato</h3>
+                                    <p class="text-zinc-500 text-sm mt-1">Habla con un asesor experto ahora mismo.</p>
+                                </div>
+                            </a>
+                            <div class="flex items-start gap-4 rounded-2xl border border-black/5 bg-white p-6 shadow-luxe-sm">
+                                <div class="w-12 h-12 shrink-0 rounded-full bg-cream flex items-center justify-center text-ink text-lg"><i class="fas fa-envelope"></i></div>
+                                <div>
+                                    <h3 class="font-serif text-lg text-ink">Correo Electrónico</h3>
+                                    <a href="mailto:Gregorijoyeria@gmail.com" class="text-zinc-500 text-sm mt-1 block break-all hover:text-gold-dark transition-colors">Gregorijoyeria@gmail.com</a>
+                                </div>
+                            </div>
+                            <a href="https://www.instagram.com/gregorijoyeria?igsh=YTdqc3BoOWNwb2Nj" target="_blank" rel="noopener noreferrer" class="flex items-start gap-4 rounded-2xl border border-black/5 bg-white p-6 shadow-luxe-sm transition-all hover:border-gold/50 hover:-translate-y-0.5">
+                                <div class="w-12 h-12 shrink-0 rounded-full bg-cream flex items-center justify-center text-ink text-lg"><i class="fab fa-instagram"></i></div>
+                                <div>
+                                    <h3 class="font-serif text-lg text-ink">Instagram</h3>
+                                    <p class="text-zinc-500 text-sm mt-1">@gregorijoyeria</p>
+                                </div>
+                            </a>
+                            <div class="rounded-2xl bg-ink p-6 text-center">
+                                <p class="text-zinc-400 text-xs uppercase tracking-wide2 mb-2">Atención</p>
+                                <p class="text-white font-light text-sm">100% digital · Envíos asegurados a toda Colombia</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                        <div class="bg-white p-10 flex flex-col items-center text-center shadow-lg border-t-4 border-gold transform md:-translate-y-4">
-                            <div class="w-16 h-16 rounded-full bg-yellow-50 flex items-center justify-center mb-6 text-gold text-2xl"><i class="fab fa-whatsapp"></i></div>
-                            <h4 class="font-serif text-xl mb-3 text-black">WhatsApp Inmediato</h4>
-                            <p class="text-zinc-500 text-sm mb-6">Habla con uno de nuestros asesores expertos.</p>
-                            <button onclick="window.open('https://wa.me/${WHATSAPP_NUMBER}')" class="px-6 py-3 text-sm uppercase tracking-widest font-bold text-white bg-gold hover:bg-yellow-700 transition-colors w-full">Escribir ahora</button>
+                </div>
+            </div>`;
+    }
+    else if (state.activeTab === 'favoritos') {
+        const favorites = getWishlistProducts();
+        html = `
+            <div class="fade-in min-h-[70vh]">
+                <section class="bg-ink text-center py-14 md:py-16 px-4">
+                    <i class="fas fa-heart text-gold text-2xl mb-4"></i>
+                    <h1 class="text-3xl md:text-5xl font-serif text-white mb-3">Tus Favoritos</h1>
+                    <p class="text-zinc-400 font-light">${favorites.length ? `${favorites.length} pieza${favorites.length === 1 ? '' : 's'} guardada${favorites.length === 1 ? '' : 's'}` : 'Guarda las piezas que más te gusten'}</p>
+                </section>
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
+                    ${favorites.length ? `
+                        <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                            ${favorites.map(p => renderProductCard(p, true)).join('')}
                         </div>
-                        <div class="bg-white p-10 flex flex-col items-center text-center shadow-sm border border-zinc-100">
-                            <div class="w-16 h-16 rounded-full bg-zinc-50 flex items-center justify-center mb-6 text-zinc-800 text-2xl"><i class="fas fa-globe"></i></div>
-                            <h4 class="font-serif text-xl mb-3 text-black">Asesoría Virtual</h4>
-                            <p class="text-zinc-500 text-sm mb-6">Solicita una videollamada para ver los detalles.</p>
-                            <button onclick="window.open('https://wa.me/${WHATSAPP_NUMBER}?text=Hola,%20deseo%20agendar%20una%20videollamada.')" class="px-6 py-3 text-sm uppercase tracking-widest font-bold text-black border border-black hover:bg-black hover:text-white transition-colors w-full">Agendar Cita</button>
+                    ` : `
+                        <div class="max-w-md mx-auto text-center rounded-2xl border border-dashed border-zinc-300 bg-white p-14">
+                            <i class="far fa-heart text-4xl text-zinc-300"></i>
+                            <p class="mt-6 text-lg text-zinc-500">Aún no tienes favoritos.</p>
+                            <p class="mt-2 text-sm text-zinc-400">Toca el corazón en cualquier joya para guardarla aquí.</p>
+                            <button onclick="navigate('catalogo')" class="mt-8 rounded-full border border-ink px-7 py-3 text-xs font-bold uppercase tracking-wide2 text-ink transition-colors hover:bg-ink hover:text-white">
+                                Explorar catálogo
+                            </button>
                         </div>
-                        <div class="bg-white p-10 flex flex-col items-center text-center shadow-sm border border-zinc-100 lg:col-span-1 md:col-span-2">
-                            <div class="w-16 h-16 rounded-full bg-zinc-50 flex items-center justify-center mb-6 text-zinc-800 text-2xl"><i class="fas fa-envelope"></i></div>
-                            <h4 class="font-serif text-xl mb-3 text-black">Correo Electrónico</h4>
-                            <p class="text-zinc-500 text-sm">Gregorijoyeria@gmail.com</p>
-                        </div>
-                    </div>
+                    `}
                 </div>
             </div>`;
     }
     else if (state.activeTab === 'admin') {
         if (!state.isAdminAuthenticated) {
             html = `
-                <div class="py-12 md:py-20 fade-in bg-zinc-50 min-h-[80vh] flex items-center justify-center">
-                    <div class="bg-white p-10 shadow-sm border border-zinc-200 max-w-md w-full mx-4">
-                        <div class="text-center mb-8">
-                            <div class="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <i class="fas fa-lock text-2xl text-gold"></i>
+                <div class="relative min-h-[85vh] fade-in bg-ink flex items-center justify-center px-4 py-16 overflow-hidden">
+                    <div class="absolute inset-0 opacity-[0.06] bg-[radial-gradient(circle_at_top,_var(--gold),_transparent_60%)]" aria-hidden="true"></div>
+                    <div class="relative w-full max-w-md">
+                        <div class="reveal is-visible bg-ivory rounded-2xl shadow-luxe p-8 md:p-10">
+                            <div class="text-center mb-8">
+                                <div class="w-16 h-16 bg-gold-50 rounded-full flex items-center justify-center mx-auto mb-5 ring-1 ring-gold/20">
+                                    <i class="fas fa-lock text-2xl text-gold-dark"></i>
+                                </div>
+                                <p class="uppercase tracking-luxe text-[10px] font-bold text-gold-dark mb-2">Panel privado</p>
+                                <h2 class="text-2xl font-serif text-ink mb-2">Acceso Restringido</h2>
+                                <p class="text-zinc-500 text-sm">Ingresa tus credenciales para administrar el catálogo.</p>
                             </div>
-                            <h2 class="text-2xl font-serif text-black mb-2">Acceso Restringido</h2>
-                            <p class="text-zinc-500 text-sm">Ingresa tus credenciales para administrar el catálogo.</p>
+                            <form onsubmit="handleLogin(event)" class="space-y-5">
+                                <div>
+                                    <label for="login-user" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-2">Usuario</label>
+                                    <input required id="login-user" type="text" autocomplete="username" class="w-full rounded-lg border border-zinc-300 p-3 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" />
+                                </div>
+                                <div>
+                                    <label for="login-pass" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-2">Contraseña</label>
+                                    <input required id="login-pass" type="password" autocomplete="current-password" class="w-full rounded-lg border border-zinc-300 p-3 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" />
+                                </div>
+                                <button type="submit" class="w-full flex items-center justify-center gap-2 rounded-full py-4 text-ink text-sm uppercase tracking-wide2 font-bold bg-gold hover:bg-gold-light transition-colors shadow-gold mt-2">
+                                    <i class="fas fa-arrow-right-to-bracket"></i> Ingresar
+                                </button>
+                            </form>
                         </div>
-                        <form onsubmit="handleLogin(event)" class="space-y-5">
-                            <div>
-                                <label class="block text-xs text-zinc-500 uppercase tracking-widest mb-2">Usuario</label>
-                                <input required id="login-user" type="text" class="w-full border border-zinc-300 p-3 text-sm focus:border-gold focus:outline-none transition-colors" />
-                            </div>
-                            <div>
-                                <label class="block text-xs text-zinc-500 uppercase tracking-widest mb-2">Contraseña</label>
-                                <input required id="login-pass" type="password" class="w-full border border-zinc-300 p-3 text-sm focus:border-gold focus:outline-none transition-colors" />
-                            </div>
-                            <button type="submit" class="w-full py-4 text-white text-sm uppercase tracking-widest font-bold bg-black hover:bg-gold transition-colors mt-4">Ingresar</button>
-                        </form>
+                        <button onclick="navigate('inicio')" class="mt-6 mx-auto block text-zinc-400 hover:text-gold-light text-xs uppercase tracking-wide2 transition-colors">← Volver al sitio</button>
                     </div>
                 </div>`;
         } else {
+            const totalProducts = state.products.length;
+            const disponibles = state.products.filter(p => p.status === 'disponible').length;
+            const agotados = totalProducts - disponibles;
+            const editingProduct = state.editingProductId ? state.products.find(p => p.id === state.editingProductId) : null;
             html = `
-                <div class="py-12 fade-in bg-zinc-50 min-h-screen">
+                <div class="py-10 md:py-12 fade-in bg-ivory min-h-screen">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div class="mb-10 border-b border-zinc-200 pb-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <!-- Encabezado -->
+                        <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-5">
                             <div>
-                                <h2 class="text-3xl font-serif text-black mb-2 flex items-center gap-3">
-                                    <i class="fas fa-cog text-gold"></i> Panel Administrativo
-                                </h2>
-                                <p class="text-zinc-500 text-sm">Gestiona el inventario y disponibilidad.</p>
+                                <p class="uppercase tracking-luxe text-[10px] font-bold text-gold-dark mb-2">Gregori Joyería</p>
+                                <h1 class="text-3xl md:text-4xl font-serif text-ink flex items-center gap-3">
+                                    <i class="fas fa-gem text-gold"></i> Panel Administrativo
+                                </h1>
+                                <p class="text-zinc-500 text-sm mt-1">Gestiona el inventario, precios y disponibilidad.</p>
                             </div>
-                            <button onclick="handleLogout()" class="px-5 py-2 border border-zinc-300 text-xs text-zinc-600 hover:bg-zinc-100 hover:text-black transition-colors uppercase tracking-widest font-bold flex items-center gap-2 w-fit">
-                                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                            <button onclick="handleLogout()" class="rounded-full px-5 py-2.5 border border-zinc-300 text-xs text-zinc-600 hover:bg-ink hover:text-white hover:border-ink transition-colors uppercase tracking-wide2 font-bold flex items-center gap-2 w-fit">
+                                <i class="fas fa-arrow-right-from-bracket"></i> Cerrar Sesión
                             </button>
                         </div>
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+
+                        <!-- Estadísticas -->
+                        <div class="grid grid-cols-3 gap-3 md:gap-5 mb-8">
+                            <div class="rounded-xl bg-white border border-black/5 shadow-luxe-sm p-5">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 shrink-0 rounded-full bg-cream flex items-center justify-center text-ink"><i class="fas fa-boxes-stacked"></i></div>
+                                    <div><p class="font-serif text-2xl md:text-3xl text-ink leading-none">${totalProducts}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1">Total</p></div>
+                                </div>
+                            </div>
+                            <div class="rounded-xl bg-white border border-black/5 shadow-luxe-sm p-5">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 shrink-0 rounded-full bg-green-50 flex items-center justify-center text-green-600"><i class="fas fa-circle-check"></i></div>
+                                    <div><p class="font-serif text-2xl md:text-3xl text-ink leading-none">${disponibles}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1">Disponibles</p></div>
+                                </div>
+                            </div>
+                            <div class="rounded-xl bg-white border border-black/5 shadow-luxe-sm p-5">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 shrink-0 rounded-full bg-red-50 flex items-center justify-center text-red-500"><i class="fas fa-circle-xmark"></i></div>
+                                    <div><p class="font-serif text-2xl md:text-3xl text-ink leading-none">${agotados}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1">Agotados</p></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                             <!-- Formulario -->
-                            <div class="lg:col-span-1 bg-white p-6 shadow-sm border border-zinc-200 h-fit">
-                                <h3 class="uppercase tracking-widest text-sm font-bold text-black mb-6 flex items-center gap-2"><i class="fas ${state.editingProductId ? 'fa-pen' : 'fa-plus'}"></i> ${state.editingProductId ? 'Editar Producto' : 'Nuevo Producto'}</h3>
+                            <div class="lg:col-span-1 bg-white rounded-2xl p-6 shadow-luxe-sm border ${state.editingProductId ? 'border-gold/50 ring-1 ring-gold/20' : 'border-black/5'} h-fit lg:sticky lg:top-24">
+                                <h2 class="uppercase tracking-wide2 text-sm font-bold text-ink mb-6 flex items-center gap-2"><i class="fas ${state.editingProductId ? 'fa-pen text-gold-dark' : 'fa-plus text-gold-dark'}"></i> ${state.editingProductId ? 'Editar Producto' : 'Nuevo Producto'}</h2>
                                 <form onsubmit="handleAddProduct(event)" class="space-y-4">
-                                    <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Nombre</label>
-                                    <input required id="add-name" type="text" value="${state.editingProductId ? escapeHtml(state.products.find(p => p.id === state.editingProductId)?.name || '') : ''}" class="w-full border border-zinc-300 p-2 text-sm focus:border-yellow-600 focus:outline-none" /></div>
-                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Categoría</label>
-                                        <select id="add-cat" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none">
-                                            ${categories.filter(c => c !== 'Todos').map(c => `<option value="${c}" ${state.editingProductId && state.products.find(p => p.id === state.editingProductId)?.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                    <div><label for="add-name" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">Nombre</label>
+                                    <input required id="add-name" type="text" value="${editingProduct ? escapeHtml(editingProduct.name || '') : ''}" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" /></div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div><label for="add-cat" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">Categoría</label>
+                                        <select id="add-cat" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none cursor-pointer">
+                                            ${categories.filter(c => c !== 'Todos').map(c => `<option value="${c}" ${editingProduct?.category === c ? 'selected' : ''}>${c}</option>`).join('')}
                                         </select></div>
-                                        <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Material</label>
-                                        <select id="add-material" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none">
-                                            ${materials.filter(m => m !== 'Todos').map(m => `<option value="${m}" ${state.editingProductId && state.products.find(p => p.id === state.editingProductId)?.material === m ? 'selected' : ''}>${m}</option>`).join('')}
+                                        <div><label for="add-material" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">Material</label>
+                                        <select id="add-material" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none cursor-pointer">
+                                            ${materials.filter(m => m !== 'Todos').map(m => `<option value="${m}" ${editingProduct?.material === m ? 'selected' : ''}>${m}</option>`).join('')}
                                         </select></div>
-                                        <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Precio</label>
-                                        <input required id="add-price" type="text" value="${state.editingProductId ? escapeHtml(formatPriceForInput(state.products.find(p => p.id === state.editingProductId)?.price)) : ''}" inputmode="numeric" placeholder="200.000" onblur="formatAdminPriceInput()" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" /></div>
+                                        <div><label for="add-price" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">Precio</label>
+                                        <input required id="add-price" type="text" value="${editingProduct ? escapeHtml(formatPriceForInput(editingProduct.price)) : ''}" inputmode="numeric" placeholder="200.000" onblur="formatAdminPriceInput()" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" /></div>
                                     </div>
-                                    <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Imágenes del producto</label>
-                                    <div class="space-y-3">
-                                    <input required id="add-img-1" type="url" value="${state.editingProductId ? escapeHtml(getProductImages(state.products.find(p => p.id === state.editingProductId) || {})[0] || '') : ''}" placeholder="Foto 1" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" />
-                                    <input id="add-img-2" type="url" value="${state.editingProductId ? escapeHtml(getProductImages(state.products.find(p => p.id === state.editingProductId) || {})[1] || '') : ''}" placeholder="Foto 2" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" />
-                                    <input id="add-img-3" type="url" value="${state.editingProductId ? escapeHtml(getProductImages(state.products.find(p => p.id === state.editingProductId) || {})[2] || '') : ''}" placeholder="Foto 3" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none" />
+                                    <div><label for="add-img-1" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">Imágenes del producto</label>
+                                    <div class="space-y-2.5">
+                                    <input required id="add-img-1" type="url" value="${editingProduct ? escapeHtml(getProductImages(editingProduct)[0] || '') : ''}" placeholder="URL Foto 1 (portada)" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" />
+                                    <input id="add-img-2" type="url" value="${editingProduct ? escapeHtml(getProductImages(editingProduct)[1] || '') : ''}" placeholder="URL Foto 2 (opcional)" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" />
+                                    <input id="add-img-3" type="url" value="${editingProduct ? escapeHtml(getProductImages(editingProduct)[2] || '') : ''}" placeholder="URL Foto 3 (opcional)" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" />
                                     </div>
                                     <div class="mt-2 flex items-center justify-between gap-3">
-                                        <p class="text-[11px] text-zinc-400">Puedes cargar entre 1 y 3 imágenes. La primera será la portada del producto.</p>
-                                        <button type="button" onclick="window.open('https://cloudinary.com/', '_blank')" class="shrink-0 text-[11px] uppercase tracking-widest font-bold text-gold hover:text-yellow-700 transition-colors">Cloudinary</button>
+                                        <p class="text-[11px] text-zinc-400">Entre 1 y 3 imágenes. La primera será la portada.</p>
+                                        <button type="button" onclick="window.open('https://cloudinary.com/', '_blank')" class="shrink-0 text-[11px] uppercase tracking-wide2 font-bold text-gold-dark hover:text-gold-deep transition-colors">Cloudinary</button>
                                     </div>
                                     </div>
-                                    <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Descripción</label>
-                                    <textarea required id="add-desc" rows="3" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none">${state.editingProductId ? escapeHtml(state.products.find(p => p.id === state.editingProductId)?.description || '') : ''}</textarea></div>
-                                    <div><label class="block text-xs text-zinc-500 uppercase tracking-widest mb-1">Estado</label>
-                                    <select id="add-status" class="w-full border border-zinc-300 p-2 text-sm focus:outline-none">
-                                        <option value="disponible" ${state.editingProductId && state.products.find(p => p.id === state.editingProductId)?.status === 'disponible' ? 'selected' : ''}>Disponible</option><option value="agotado" ${state.editingProductId && state.products.find(p => p.id === state.editingProductId)?.status === 'agotado' ? 'selected' : ''}>Agotado</option>
+                                    <div><label for="add-desc" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">Descripción</label>
+                                    <textarea required id="add-desc" rows="3" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all">${editingProduct ? escapeHtml(editingProduct.description || '') : ''}</textarea></div>
+                                    <div><label for="add-status" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">Estado</label>
+                                    <select id="add-status" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none cursor-pointer">
+                                        <option value="disponible" ${editingProduct?.status === 'disponible' ? 'selected' : ''}>Disponible</option><option value="agotado" ${editingProduct?.status === 'agotado' ? 'selected' : ''}>Agotado</option>
                                     </select></div>
-                                    <div class="grid grid-cols-1 ${state.editingProductId ? 'sm:grid-cols-2' : ''} gap-3">
-                                        <button id="add-submit" type="submit" class="w-full py-3 mt-4 text-white text-sm uppercase tracking-widest font-bold bg-gold hover:bg-yellow-700 transition-colors">${state.editingProductId ? 'Actualizar Producto' : 'Guardar Producto'}</button>
-                                        ${state.editingProductId ? '<button type="button" onclick="cancelEditProduct()" class="w-full py-3 mt-4 border border-zinc-300 text-zinc-600 text-sm uppercase tracking-widest font-bold hover:bg-zinc-100 transition-colors">Cancelar</button>' : ''}
+                                    <div class="grid grid-cols-1 ${state.editingProductId ? 'sm:grid-cols-2' : ''} gap-3 pt-2">
+                                        <button id="add-submit" type="submit" class="w-full rounded-full py-3 text-ink text-sm uppercase tracking-wide2 font-bold bg-gold hover:bg-gold-light transition-colors shadow-gold">${state.editingProductId ? 'Actualizar' : 'Guardar Producto'}</button>
+                                        ${state.editingProductId ? '<button type="button" onclick="cancelEditProduct()" class="w-full rounded-full py-3 border border-zinc-300 text-zinc-600 text-sm uppercase tracking-wide2 font-bold hover:bg-zinc-100 transition-colors">Cancelar</button>' : ''}
                                     </div>
                                 </form>
                             </div>
                             <!-- Tabla -->
-                            <div class="lg:col-span-2 bg-white shadow-sm border border-zinc-200 overflow-hidden">
+                            <div class="lg:col-span-2 bg-white rounded-2xl shadow-luxe-sm border border-black/5 overflow-hidden">
+                                <div class="px-6 py-4 border-b border-black/5 flex items-center justify-between">
+                                    <h2 class="font-serif text-lg text-ink">Inventario</h2>
+                                    <span class="text-[10px] uppercase tracking-wide2 text-zinc-400">${totalProducts} pieza${totalProducts === 1 ? '' : 's'}</span>
+                                </div>
                                 <div class="overflow-x-auto">
                                     <table class="w-full text-left border-collapse">
                                         <thead>
-                                            <tr class="bg-zinc-100 text-zinc-600 text-xs uppercase tracking-widest">
+                                            <tr class="bg-cream text-zinc-500 text-[10px] uppercase tracking-wide2">
                                                 <th class="p-4 font-semibold">Producto</th><th class="p-4 font-semibold">Precio</th>
                                                 <th class="p-4 font-semibold">Estado</th><th class="p-4 font-semibold text-right">Acciones</th>
                                             </tr>
                                         </thead>
-                                        <tbody id="admin-table-body" class="divide-y divide-zinc-200 text-sm">
+                                        <tbody id="admin-table-body" class="divide-y divide-black/5 text-sm">
                                             ${renderAdminTableRows()}
                                         </tbody>
                                     </table>
-                                    <div id="admin-empty-msg" class="p-10 text-center text-zinc-500" style="display: ${state.products.length === 0 ? 'block' : 'none'}">
+                                    <div id="admin-empty-msg" class="p-12 text-center text-zinc-500" style="display: ${totalProducts === 0 ? 'block' : 'none'}">
+                                        <i class="fas fa-box-open text-3xl text-zinc-300 mb-4"></i><br/>
                                         No hay productos en la base de datos.<br/>
-                                        <button type="button" onclick="seedInitialData()" class="mt-4 px-6 py-2 bg-gold text-white text-xs uppercase tracking-widest font-bold hover:bg-yellow-700 transition-colors">Cargar Datos de Prueba</button>
+                                        <button type="button" onclick="seedInitialData()" class="mt-5 rounded-full px-6 py-2.5 bg-gold text-ink text-xs uppercase tracking-wide2 font-bold hover:bg-gold-light transition-colors shadow-gold">Cargar Datos de Prueba</button>
                                     </div>
                                 </div>
                             </div>
@@ -1104,56 +1389,91 @@ function renderApp() {
         focusCatalogSearch();
     }
 
+    applyScrollReveal();
     updateFloatingCartFab();
+}
+
+// --- FORMULARIO DE CONTACTO (envía por WhatsApp) ---
+function handleContactForm(e) {
+    e.preventDefault();
+    const name = document.getElementById('contact-name')?.value.trim() || '';
+    const phone = document.getElementById('contact-phone')?.value.trim() || '';
+    const interest = document.getElementById('contact-interest')?.value || 'Información general';
+    const message = document.getElementById('contact-message')?.value.trim() || '';
+
+    const text = `Hola Gregori Joyería, soy *${name}*.\n\nInterés: ${interest}\nMi teléfono: ${phone}\n\n${message}`;
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`, '_blank');
+    showToast('Te redirigimos a WhatsApp para enviar tu mensaje.', 'success');
 }
 
 // --- COMPONENTES AUXILIARES ---
 function renderAdminTableRows() {
     return state.products.map(p => `
-        <tr class="hover:bg-zinc-50 transition-colors">
+        <tr class="hover:bg-cream/60 transition-colors">
             <td class="p-4 flex items-center gap-3">
-                <img src="${getPrimaryProductImage(p)}" class="w-10 h-10 object-cover rounded-sm border border-zinc-200" data-image-source="${escapeHtml(getPrimaryProductImage(p))}" data-image-label="${escapeHtml(p.category)}" data-image-kind="product" referrerpolicy="no-referrer" onerror="handleImageError(this)" />
-                <div><p class="font-semibold text-black line-clamp-1">${p.name}</p><p class="text-xs text-zinc-500">${p.category} · ${p.material} · ${getProductImages(p).length} foto${getProductImages(p).length === 1 ? '' : 's'}</p></div>
+                <img src="${getPrimaryProductImage(p)}" class="w-11 h-11 object-cover rounded-lg border border-black/5" data-image-source="${escapeHtml(getPrimaryProductImage(p))}" data-image-label="${escapeHtml(p.category)}" data-image-kind="product" referrerpolicy="no-referrer" onerror="handleImageError(this)" />
+                <div class="min-w-0"><p class="font-semibold text-ink line-clamp-1">${escapeHtml(p.name)}</p><p class="text-xs text-zinc-500">${escapeHtml(p.category)} · ${escapeHtml(p.material)} · ${getProductImages(p).length} foto${getProductImages(p).length === 1 ? '' : 's'}</p></div>
             </td>
-            <td class="p-4">${formatPriceCOP(p.price)}</td>
-            <td class="p-4"><button onclick="toggleStatus('${p.id}')" class="px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-bold border transition-colors ${p.status === 'disponible' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}">${p.status}</button></td>
-            <td class="p-4 text-right">
-                <button onclick="startEditProduct('${p.id}')" class="text-zinc-400 hover:text-blue-600 transition-colors p-2" aria-label="Editar producto"><i class="fas fa-pen"></i></button>
+            <td class="p-4 font-medium text-ink whitespace-nowrap">${formatPriceCOP(p.price)}</td>
+            <td class="p-4"><button onclick="toggleStatus('${p.id}')" title="Cambiar estado" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] uppercase tracking-wide2 font-bold border transition-colors ${p.status === 'disponible' ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}"><span class="w-1.5 h-1.5 rounded-full ${p.status === 'disponible' ? 'bg-green-500' : 'bg-red-500'}"></span>${p.status}</button></td>
+            <td class="p-4 text-right whitespace-nowrap">
+                <button onclick="startEditProduct('${p.id}')" class="text-zinc-400 hover:text-gold-dark transition-colors p-2" aria-label="Editar producto"><i class="fas fa-pen"></i></button>
                 <button onclick="deleteProduct('${p.id}')" class="text-zinc-400 hover:text-red-600 transition-colors p-2" aria-label="Eliminar producto"><i class="fas fa-trash-alt"></i></button>
             </td>
         </tr>
     `).join('');
 }
 
+// Marcador de posición mientras Firebase aún no entrega productos destacados
+function renderFeaturedPlaceholder() {
+    return Array.from({ length: 3 }).map(() => `
+        <div class="rounded-xl border border-black/5 overflow-hidden">
+            <div class="aspect-square img-skeleton"></div>
+            <div class="p-4 space-y-3">
+                <div class="h-3 w-3/4 img-skeleton rounded"></div>
+                <div class="h-3 w-1/3 img-skeleton rounded"></div>
+            </div>
+        </div>
+    `).join('');
+}
+
 function renderProductCard(product, inCatalog = false) {
     const isAgotado = product.status === 'agotado';
     const imgClass = isAgotado ? 'grayscale-30' : '';
-    const bgClass = inCatalog ? 'bg-white p-4 hover:shadow-xl hover:shadow-zinc-200/50' : 'flex flex-col items-center';
+    const primaryImage = getPrimaryProductImage(product);
 
-    let badges = '';
+    const badges = [];
     if (inCatalog) {
-        badges += `<span class="bg-white/90 backdrop-blur-sm px-3 py-1 text-[10px] uppercase tracking-widest font-bold text-zinc-800 w-fit">${product.category}</span>`;
-        badges += `<span class="bg-black/80 backdrop-blur-sm px-3 py-1 text-[10px] uppercase tracking-widest font-bold text-white w-fit">${product.material || 'Oro laminado'}</span>`;
+        badges.push(`<span class="bg-white/95 backdrop-blur-sm px-2.5 py-1 text-[9px] uppercase tracking-wide2 font-bold text-ink rounded-full shadow-sm">${escapeHtml(product.category)}</span>`);
     }
     if (isAgotado) {
-        badges += `<span class="bg-black/90 text-white px-3 py-1 text-[10px] uppercase tracking-widest font-bold w-fit ${!inCatalog ? 'absolute top-4 right-4 z-10' : ''}">Agotado</span>`;
+        badges.push(`<span class="bg-ink/90 text-white px-2.5 py-1 text-[9px] uppercase tracking-wide2 font-bold rounded-full">Agotado</span>`);
     }
 
     return `
-        <div class="group cursor-pointer transition-all duration-300 ${bgClass}" onclick="openModal('${product.id}')">
-            <div class="${inCatalog ? 'aspect-square' : 'w-full aspect-[4/5]'} bg-zinc-100 mb-4 overflow-hidden relative ${isAgotado && inCatalog ? 'opacity-80' : ''}">
-                <img src="${getPrimaryProductImage(product)}" alt="${product.name}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 ${imgClass}" data-image-source="${escapeHtml(getPrimaryProductImage(product))}" data-image-label="${escapeHtml(product.category)}" data-image-kind="product" referrerpolicy="no-referrer" onerror="handleImageError(this)" />
-                <div class="${inCatalog ? 'absolute top-3 left-3 flex flex-col gap-2' : ''}">${badges}</div>
-                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center z-0">
-                    <span class="opacity-0 group-hover:opacity-100 transition-opacity duration-300 px-6 py-3 bg-white text-black text-xs uppercase tracking-widest font-bold">Ver Detalles</span>
+        <article class="group relative flex flex-col rounded-xl bg-white border border-black/[0.06] overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-luxe hover:border-gold/40 cursor-pointer" onclick="openModal('${product.id}')">
+            <div class="relative aspect-square bg-cream overflow-hidden ${isAgotado ? 'opacity-90' : ''}">
+                <img src="${primaryImage}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-[900ms] ease-out group-hover:scale-105 ${imgClass}" data-image-source="${escapeHtml(primaryImage)}" data-image-label="${escapeHtml(product.category)}" data-image-kind="product" referrerpolicy="no-referrer" onerror="handleImageError(this)" />
+                <div class="absolute top-3 left-3 flex flex-col gap-2 z-10">${badges.join('')}</div>
+                <div class="absolute top-3 right-3 z-10">${renderWishlistButton(product, 'card')}</div>
+                <div class="absolute inset-x-0 bottom-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 hidden sm:block">
+                    <span class="block text-center py-2.5 bg-ink/90 backdrop-blur-sm text-white text-[10px] uppercase tracking-wide2 font-bold">Ver detalles</span>
                 </div>
             </div>
-            <div class="text-center">
-                <h4 class="font-serif text-lg text-black mb-1 line-clamp-1">${product.name}</h4>
-                <p class="text-sm text-gold font-medium">${formatPriceCOP(product.price)}</p>
-                ${inCatalog && !isAgotado ? `<button onclick="event.stopPropagation(); addToCart('${product.id}')" class="mt-4 rounded-full border border-zinc-300 px-4 py-2 text-[11px] uppercase tracking-widest font-bold text-zinc-700 transition-colors hover:border-black hover:text-black">Agregar al carrito</button>` : ''}
+            <div class="flex flex-col flex-1 p-4 text-center">
+                <p class="text-[10px] uppercase tracking-wide2 text-gold-dark font-semibold mb-1.5">${escapeHtml(product.material || 'Oro laminado')}</p>
+                <h3 class="font-serif text-base md:text-lg text-ink mb-1.5 line-clamp-1">${escapeHtml(product.name)}</h3>
+                <p class="text-sm text-zinc-700 font-medium mb-3">${formatPriceCOP(product.price)}</p>
+                ${inCatalog ? `
+                    <div class="mt-auto pt-1">
+                        ${isAgotado
+                            ? `<button onclick="event.stopPropagation(); contactWhatsApp('${product.id}')" class="w-full rounded-full border border-zinc-300 px-4 py-2.5 text-[10px] uppercase tracking-wide2 font-bold text-zinc-600 transition-colors hover:border-ink hover:text-ink">Consultar disponibilidad</button>`
+                            : `<button onclick="event.stopPropagation(); addToCart('${product.id}', event)" class="w-full rounded-full bg-cream border border-transparent px-4 py-2.5 text-[10px] uppercase tracking-wide2 font-bold text-ink transition-colors hover:bg-gold hover:text-ink">Agregar al carrito</button>`
+                        }
+                    </div>
+                ` : ''}
             </div>
-        </div>
+        </article>
     `;
 }
 
@@ -1255,11 +1575,14 @@ function openModal(id) {
                     <p class="text-xl md:text-2xl text-zinc-600 mb-6 md:mb-8 font-light">${formatPriceCOP(product.price)}</p>
                     <div class="w-12 h-[1px] bg-zinc-300 mb-8"></div>
                     <p class="text-zinc-600 leading-relaxed mb-12">${product.description}</p>
-                    <div class="flex w-full flex-col gap-3 md:w-auto">
-                        <button onclick="contactWhatsApp('${product.id}')" class="w-full md:w-auto px-6 sm:px-10 py-4 flex items-center justify-center space-x-3 uppercase tracking-widest text-xs sm:text-sm font-bold transition-all duration-300 transform hover:-translate-y-1 shadow-lg ${btnColor}">
+                    <div class="flex w-full flex-col gap-3">
+                        <button onclick="contactWhatsApp('${product.id}')" class="w-full px-6 sm:px-10 py-4 flex items-center justify-center space-x-3 uppercase tracking-wide2 text-xs sm:text-sm font-bold transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg ${btnColor}">
                             <i class="fab fa-whatsapp text-lg"></i> <span>${btnText}</span>
                         </button>
-                        ${!isAgotado ? `<button onclick="addToCart('${product.id}')" class="w-full md:w-auto px-6 sm:px-10 py-4 border border-zinc-300 text-zinc-700 hover:border-black hover:text-black uppercase tracking-widest text-xs font-bold transition-colors">Agregar al carrito</button>` : ''}
+                        <div class="flex gap-3">
+                            ${!isAgotado ? `<button onclick="addToCart('${product.id}', event)" class="flex-1 px-6 py-4 border border-zinc-300 text-zinc-700 hover:border-ink hover:text-ink uppercase tracking-wide2 text-xs font-bold transition-colors">Agregar al carrito</button>` : ''}
+                            ${renderWishlistButton(product, 'modal')}
+                        </div>
                     </div>
                     <div class="mt-8 pt-8 border-t border-zinc-100 flex items-center space-x-4 text-sm text-zinc-500">
                         <i class="fas fa-shield-alt"></i><span>100% Compra Segura Online - Envío Asegurado</span>
@@ -1271,8 +1594,22 @@ function openModal(id) {
     `;
 
     const modalContainer = document.getElementById('product-modal');
-    modalContainer.innerHTML = modalHtml;
+    // Si el modal ya estaba abierto (p. ej. al elegir un producto relacionado),
+    // animamos la entrada del nuevo contenido y subimos suavemente al inicio
+    // para que el cambio de producto sea evidente.
+    const wasOpen = !modalContainer.classList.contains('hidden');
+    modalContainer.innerHTML = `<div${wasOpen ? ' class="modal-swap-in"' : ''}>${modalHtml}</div>`;
     modalContainer.classList.remove('hidden');
+    if (wasOpen) {
+        const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        modalContainer.scrollTo({ top: 0, behavior: prefersReduced ? 'auto' : 'smooth' });
+        // Respaldo: si el desplazamiento suave se interrumpe, forzamos la subida
+        setTimeout(() => {
+            if (modalContainer.scrollTop > 4) modalContainer.scrollTop = 0;
+        }, 650);
+    } else {
+        modalContainer.scrollTop = 0;
+    }
     document.body.style.overflow = 'hidden'; // Evitar scroll de fondo
     updateFloatingCartFab();
 }
@@ -1345,12 +1682,65 @@ function setMaterialFilter(material) {
     updateCatalogSearchUI();
 }
 
-function addToCart(productId) {
+// --- ANIMACIÓN DE VUELO AL CARRITO ---
+function getVisibleCartTarget() {
+    return [...document.querySelectorAll('[data-cart-target]')]
+        .find(el => el.getBoundingClientRect().width > 0);
+}
+
+function flyImageToCart(sourceImg) {
+    const target = getVisibleCartTarget();
+    if (!sourceImg || !target) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const from = sourceImg.getBoundingClientRect();
+    if (!from.width) return;
+    const to = target.getBoundingClientRect();
+
+    const clone = document.createElement('img');
+    clone.src = sourceImg.currentSrc || sourceImg.src;
+    clone.alt = '';
+    clone.className = 'cart-fly-img';
+    Object.assign(clone.style, {
+        left: `${from.left}px`,
+        top: `${from.top}px`,
+        width: `${from.width}px`,
+        height: `${from.height}px`,
+        opacity: '0.95'
+    });
+    document.body.appendChild(clone);
+
+    // Reflow forzado: garantiza que el estado inicial se aplique antes de animar
+    void clone.offsetWidth;
+    Object.assign(clone.style, {
+        left: `${to.left + to.width / 2 - 14}px`,
+        top: `${to.top + to.height / 2 - 14}px`,
+        width: '28px',
+        height: '28px',
+        opacity: '0.2'
+    });
+
+    setTimeout(() => {
+        clone.remove();
+        // Bump del contador justo cuando "aterriza" el producto
+        document.querySelectorAll('.cart-count-badge').forEach(badge => {
+            badge.classList.remove('cart-bump');
+            void badge.offsetWidth; // reinicia la animación
+            badge.classList.add('cart-bump');
+        });
+    }, 720);
+}
+
+function addToCart(productId, ev) {
     const product = state.products.find(p => p.id === productId);
     if (!product || product.status === 'agotado') {
         showToast("Este producto no está disponible para agregar al carrito.", 'error');
         return;
     }
+
+    const sourceImg = ev?.target?.closest?.('article')?.querySelector('img')
+        || document.getElementById('product-main-image');
+    flyImageToCart(sourceImg);
 
     const existing = state.cart.find(item => item.id === productId);
     if (existing) {
@@ -1359,6 +1749,7 @@ function addToCart(productId) {
         state.cart.push({ id: productId, quantity: 1 });
     }
 
+    persistCart();
     renderNav();
     if (state.activeTab === 'carrito') renderApp();
     showToast("Producto agregado al carrito.", 'success');
@@ -1371,18 +1762,21 @@ function changeCartQuantity(productId, delta) {
     if (item.quantity <= 0) {
         state.cart = state.cart.filter(entry => entry.id !== productId);
     }
+    persistCart();
     renderNav();
     renderApp();
 }
 
 function removeFromCart(productId) {
     state.cart = state.cart.filter(item => item.id !== productId);
+    persistCart();
     renderNav();
     if (state.activeTab === 'carrito') renderApp();
 }
 
 function clearCart() {
     state.cart = [];
+    persistCart();
     renderNav();
     renderApp();
 }
@@ -1640,7 +2034,8 @@ Object.assign(window, {
     handleProductZoomMove, resetProductZoom, setSelectedProductImage,
     openWorkWithUsWhatsApp, formatAdminPriceInput, seedInitialData, showToast,
     addToCart, changeCartQuantity, removeFromCart, clearCart, checkoutCartWhatsApp,
-    startEditProduct, cancelEditProduct
+    startEditProduct, cancelEditProduct,
+    toggleWishlist, handleContactForm
 });
 
 // --- INICIALIZACIÓN ---
