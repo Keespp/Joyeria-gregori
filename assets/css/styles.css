@@ -216,6 +216,65 @@ body {
     }
 }
 
+/* --- Desplegables de la ficha (medios de pago, empaque, cuidado) --- */
+.product-extra {
+    border: 1px solid rgba(20, 18, 16, 0.08);
+    border-radius: 16px;
+    background: #fff;
+    overflow: hidden;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.product-extra[open] {
+    border-color: rgba(198, 161, 91, 0.45);
+    box-shadow: 0 10px 30px rgba(20, 18, 16, 0.06);
+}
+
+.product-extra-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+/* Oculta el marcador nativo del <summary> en todos los navegadores */
+.product-extra-summary::-webkit-details-marker {
+    display: none;
+}
+
+.product-extra-summary::marker {
+    content: '';
+}
+
+.product-extra-chevron {
+    transition: transform 0.3s ease;
+}
+
+.product-extra[open] .product-extra-chevron {
+    transform: rotate(180deg);
+}
+
+.product-extra-body {
+    padding: 0 1.25rem 1.25rem;
+    animation: extraReveal 0.35s ease;
+}
+
+@keyframes extraReveal {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
 /* --- Respeto a usuarios que prefieren menos movimiento --- */
 @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }

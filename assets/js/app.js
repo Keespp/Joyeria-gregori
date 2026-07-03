@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
@@ -31,7 +31,29 @@ const NAV_LABELS = {
     contacto: 'Contacto'
 };
 const categories = ["Todos", "Cadenas", "Aretes", "Anillos", "Pulseras", "Combos"];
-const materials = ["Todos", "Oro laminado", "Plata"];
+const materials = ["Todos", "Oro", "Oro laminado", "Plata"];
+// Materiales reales de una joya (el resto de la lista, sin el filtro "Todos")
+const JEWELRY_MATERIALS = materials.filter(m => m !== 'Todos');
+
+// Medios de pago que se muestran en la ficha del producto (logos estables vía import.meta)
+const PAYMENT_METHODS = [
+    { name: 'Nequi', src: new URL('../images/pago-nequi.svg', import.meta.url).href, note: 'Transferencia o pago con QR' },
+    { name: 'Bre-B', src: new URL('../images/pago-breb.svg', import.meta.url).href, note: 'Pago instantáneo con tu llave' }
+];
+
+// Textos de cuidado por defecto según el material (el admin puede sobrescribirlos)
+const DEFAULT_CARE = {
+    'Oro': 'El oro es un metal noble que no se oxida. Límpialo con un paño suave y seco; para un brillo profundo usa agua tibia con jabón neutro y sécalo por completo. Evita el contacto con cloro y productos abrasivos, y guárdalo en su bolsa individual para prevenir rayones.',
+    'Oro laminado': 'El oro laminado conserva su brillo con buen cuidado: retíralo antes de bañarte, nadar o hacer ejercicio. Evita el contacto con perfumes, cremas, cloro y sudor. Límpialo con un paño suave y seco, y guárdalo en un lugar seco dentro de su bolsa.',
+    'Plata': 'La plata puede oscurecerse de forma natural con el tiempo. Límpiala con un paño especial para plata o con un paño suave y seco. Evita el contacto con perfumes, humedad y productos químicos, y guárdala en una bolsa antihumedad bien cerrada para conservar su brillo.'
+};
+const DEFAULT_CARE_FALLBACK = 'Guarda tu joya en un lugar seco y en su bolsa individual. Evita el contacto con perfumes, cremas y productos químicos, y límpiala con un paño suave y seco para conservar su brillo.';
+
+// Configuración por defecto del empaque (el admin puede sobrescribirla)
+const DEFAULT_EMPAQUE = {
+    image: '',
+    description: 'Cada pieza se entrega en un empaque de regalo de Gregori Joyería, ideal para sorprender y para conservar tu joya siempre protegida.'
+};
 const COP_PRICE_FORMATTER = new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
@@ -65,7 +87,8 @@ let state = {
     adminPassHash: '', // Se calculará de forma segura al iniciar
     products: [], // Iniciamos vacío, Firebase se encarga de llenarlo en tiempo real
     cart: [],
-    wishlist: [] // IDs de productos marcados como favoritos
+    wishlist: [], // IDs de productos marcados como favoritos
+    settings: { empaque: { ...DEFAULT_EMPAQUE }, cuidado: {} } // Empaque y textos de cuidado configurables desde el admin
 };
 
 // --- PERSISTENCIA LOCAL (carrito y favoritos sobreviven a recargas) ---
@@ -140,6 +163,31 @@ onSnapshot(collection(db, "products"), (snapshot) => {
     }
 }, (error) => {
     console.error("Error al leer de Firebase: ", error);
+});
+
+// --- CONFIGURACIÓN EDITABLE (empaque y cuidado) EN TIEMPO REAL ---
+onSnapshot(doc(db, "settings", "config"), (snap) => {
+    const data = snap.exists() ? snap.data() : {};
+    state.settings = {
+        empaque: {
+            image: data?.empaque?.image || '',
+            description: data?.empaque?.description || DEFAULT_EMPAQUE.description
+        },
+        cuidado: (data?.cuidado && typeof data.cuidado === 'object') ? data.cuidado : {}
+    };
+
+    // Actualizaciones dirigidas para evitar parpadeos:
+    // si un cliente tiene la ficha abierta, refrescamos solo el bloque de desplegables.
+    const extras = document.getElementById('product-extras');
+    if (extras && state.selectedProduct) {
+        extras.innerHTML = renderProductExtras(state.selectedProduct);
+    }
+    // Si el admin está en el panel, resincronizamos los campos que no esté editando.
+    if (state.activeTab === 'admin' && state.isAdminAuthenticated) {
+        hydrateSettingsForm();
+    }
+}, (error) => {
+    console.error("Error al leer la configuración: ", error);
 });
 
 // Función para cargar los datos de prueba a la nube la primera vez
@@ -283,7 +331,7 @@ function getProductImages(product) {
 function normalizeProductRecord(product) {
     const normalizedImages = getProductImages(product);
     const parsedPrice = parsePriceToNumber(product?.price);
-    const material = product?.material === 'Plata' ? 'Plata' : (product?.material === 'Oro' ? 'Oro laminado' : (product?.material || 'Oro laminado'));
+    const material = JEWELRY_MATERIALS.includes(product?.material) ? product.material : 'Oro laminado';
 
     return {
         ...product,
@@ -1287,24 +1335,30 @@ function renderApp() {
                             </button>
                         </div>
 
+                        <!-- Accesos rápidos -->
+                        <div class="flex flex-wrap gap-2 mb-6">
+                            <button type="button" onclick="document.getElementById('admin-inventory').scrollIntoView({behavior:'smooth'})" class="rounded-full px-4 py-2 border border-zinc-200 bg-white text-[11px] uppercase tracking-wide2 font-bold text-zinc-600 hover:border-ink hover:text-ink transition-colors flex items-center gap-2"><i class="fas fa-boxes-stacked text-gold-dark"></i> Inventario</button>
+                            <button type="button" onclick="document.getElementById('admin-config').scrollIntoView({behavior:'smooth'})" class="rounded-full px-4 py-2 border border-zinc-200 bg-white text-[11px] uppercase tracking-wide2 font-bold text-zinc-600 hover:border-ink hover:text-ink transition-colors flex items-center gap-2"><i class="fas fa-sliders text-gold-dark"></i> Configuración</button>
+                        </div>
+
                         <!-- Estadísticas -->
                         <div class="grid grid-cols-3 gap-3 md:gap-5 mb-8">
-                            <div class="rounded-xl bg-white border border-black/5 shadow-luxe-sm p-5">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 shrink-0 rounded-full bg-cream flex items-center justify-center text-ink"><i class="fas fa-boxes-stacked"></i></div>
-                                    <div><p class="font-serif text-2xl md:text-3xl text-ink leading-none">${totalProducts}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1">Total</p></div>
+                            <div class="rounded-xl bg-white border border-black/5 shadow-luxe-sm p-3 md:p-5">
+                                <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                                    <div class="w-9 h-9 md:w-10 md:h-10 shrink-0 rounded-full bg-cream flex items-center justify-center text-ink"><i class="fas fa-boxes-stacked"></i></div>
+                                    <div class="min-w-0"><p class="font-serif text-2xl md:text-3xl text-ink leading-none">${totalProducts}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1">Total</p></div>
                                 </div>
                             </div>
-                            <div class="rounded-xl bg-white border border-black/5 shadow-luxe-sm p-5">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 shrink-0 rounded-full bg-green-50 flex items-center justify-center text-green-600"><i class="fas fa-circle-check"></i></div>
-                                    <div><p class="font-serif text-2xl md:text-3xl text-ink leading-none">${disponibles}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1">Disponibles</p></div>
+                            <div class="rounded-xl bg-white border border-black/5 shadow-luxe-sm p-3 md:p-5">
+                                <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                                    <div class="w-9 h-9 md:w-10 md:h-10 shrink-0 rounded-full bg-green-50 flex items-center justify-center text-green-600"><i class="fas fa-circle-check"></i></div>
+                                    <div class="min-w-0"><p class="font-serif text-2xl md:text-3xl text-ink leading-none">${disponibles}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1">Disponibles</p></div>
                                 </div>
                             </div>
-                            <div class="rounded-xl bg-white border border-black/5 shadow-luxe-sm p-5">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 shrink-0 rounded-full bg-red-50 flex items-center justify-center text-red-500"><i class="fas fa-circle-xmark"></i></div>
-                                    <div><p class="font-serif text-2xl md:text-3xl text-ink leading-none">${agotados}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1">Agotados</p></div>
+                            <div class="rounded-xl bg-white border border-black/5 shadow-luxe-sm p-3 md:p-5">
+                                <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                                    <div class="w-9 h-9 md:w-10 md:h-10 shrink-0 rounded-full bg-red-50 flex items-center justify-center text-red-500"><i class="fas fa-circle-xmark"></i></div>
+                                    <div class="min-w-0"><p class="font-serif text-2xl md:text-3xl text-ink leading-none">${agotados}</p><p class="text-[10px] uppercase tracking-wide2 text-zinc-400 mt-1">Agotados</p></div>
                                 </div>
                             </div>
                         </div>
@@ -1352,7 +1406,7 @@ function renderApp() {
                                 </form>
                             </div>
                             <!-- Tabla -->
-                            <div class="lg:col-span-2 bg-white rounded-2xl shadow-luxe-sm border border-black/5 overflow-hidden">
+                            <div id="admin-inventory" class="scroll-mt-24 lg:col-span-2 bg-white rounded-2xl shadow-luxe-sm border border-black/5 overflow-hidden">
                                 <div class="px-6 py-4 border-b border-black/5 flex items-center justify-between">
                                     <h2 class="font-serif text-lg text-ink">Inventario</h2>
                                     <span class="text-[10px] uppercase tracking-wide2 text-zinc-400">${totalProducts} pieza${totalProducts === 1 ? '' : 's'}</span>
@@ -1376,6 +1430,42 @@ function renderApp() {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Configuración de la tienda (empaque y cuidado) -->
+                        <div id="admin-config" class="scroll-mt-24 mt-6 lg:mt-8 bg-white rounded-2xl p-6 shadow-luxe-sm border border-black/5">
+                            <h2 class="uppercase tracking-wide2 text-sm font-bold text-ink mb-1 flex items-center gap-2"><i class="fas fa-sliders text-gold-dark"></i> Configuración de la tienda</h2>
+                            <p class="text-xs text-zinc-400 mb-6">Estos datos se muestran en los desplegables de cada producto (el medio de pago es fijo; el empaque y el cuidado son configurables).</p>
+                            <form onsubmit="handleSaveSettings(event)" class="space-y-8">
+                                <!-- Empaque -->
+                                <div>
+                                    <h3 class="text-xs font-bold uppercase tracking-wide2 text-ink mb-4 flex items-center gap-2"><i class="fas fa-gift text-gold-dark"></i> Empaque</h3>
+                                    <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-start">
+                                        <div class="space-y-4">
+                                            <div><label for="cfg-empaque-img" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">URL de la foto del empaque</label>
+                                            <input id="cfg-empaque-img" type="url" value="${escapeHtml(state.settings.empaque.image || '')}" placeholder="URL de la imagen (Cloudinary, etc.)" oninput="updateEmpaquePreview()" class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all" /></div>
+                                            <div><label for="cfg-empaque-desc" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">Descripción del empaque</label>
+                                            <textarea id="cfg-empaque-desc" rows="4" placeholder="Breve descripción del empaque..." class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all">${escapeHtml(state.settings.empaque.description || '')}</textarea></div>
+                                        </div>
+                                        <div id="cfg-empaque-preview" class="justify-self-center lg:justify-self-end">${empaquePreviewMarkup(state.settings.empaque.image || '')}</div>
+                                    </div>
+                                </div>
+                                <!-- Cuidado por material -->
+                                <div>
+                                    <h3 class="text-xs font-bold uppercase tracking-wide2 text-ink mb-1 flex items-center gap-2"><i class="fas fa-hand-sparkles text-gold-dark"></i> Cuidado según el material</h3>
+                                    <p class="text-[11px] text-zinc-400 mb-4">Cada joya muestra el texto correspondiente a su material.</p>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        ${JEWELRY_MATERIALS.map(m => {
+                                            const value = state.settings.cuidado[m] != null ? state.settings.cuidado[m] : (DEFAULT_CARE[m] || '');
+                                            return `<div><label for="cfg-care-${materialSlug(m)}" class="block text-xs text-zinc-500 uppercase tracking-wide2 mb-1.5">${escapeHtml(m)}</label>
+                                            <textarea id="cfg-care-${materialSlug(m)}" rows="6" placeholder="Cómo cuidar una joya de ${escapeHtml(m.toLowerCase())}..." class="w-full rounded-lg border border-zinc-300 p-2.5 text-sm focus:border-gold focus:outline-none focus:ring-4 focus:ring-gold-50 transition-all">${escapeHtml(value)}</textarea></div>`;
+                                        }).join('')}
+                                    </div>
+                                </div>
+                                <div class="pt-2">
+                                    <button id="cfg-submit" type="submit" class="rounded-full px-8 py-3 text-ink text-sm uppercase tracking-wide2 font-bold bg-gold hover:bg-gold-light transition-colors shadow-gold">Guardar configuración</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>`;
@@ -1546,6 +1636,76 @@ function renderProductGallery(product, isAgotado) {
     `;
 }
 
+// --- DESPLEGABLES DE LA FICHA (medios de pago, empaque y cuidado) ---
+function getProductCareText(product) {
+    const material = JEWELRY_MATERIALS.includes(product?.material) ? product.material : 'Oro laminado';
+    const custom = state.settings?.cuidado?.[material];
+    if (custom && String(custom).trim()) return String(custom);
+    return DEFAULT_CARE[material] || DEFAULT_CARE_FALLBACK;
+}
+
+function renderExtraAccordion({ icon, title, subtitle, body, open = false }) {
+    return `
+        <details class="product-extra"${open ? ' open' : ''}>
+            <summary class="product-extra-summary">
+                <span class="flex items-center gap-3">
+                    <span class="w-9 h-9 shrink-0 rounded-full bg-cream flex items-center justify-center text-gold-dark"><i class="fas ${icon}"></i></span>
+                    <span>
+                        <span class="block text-sm font-semibold text-ink uppercase tracking-wide2">${title}</span>
+                        ${subtitle ? `<span class="block text-[11px] text-zinc-400 normal-case tracking-normal">${subtitle}</span>` : ''}
+                    </span>
+                </span>
+                <i class="fas fa-chevron-down product-extra-chevron text-zinc-400"></i>
+            </summary>
+            <div class="product-extra-body">${body}</div>
+        </details>
+    `;
+}
+
+function renderProductExtras(product) {
+    if (!product) return '';
+    const material = JEWELRY_MATERIALS.includes(product.material) ? product.material : 'Oro laminado';
+
+    const paymentsHtml = `
+        <p class="text-sm text-zinc-500 leading-relaxed mb-4">Recibimos tus pagos de forma rápida y segura a través de:</p>
+        <div class="grid grid-cols-2 gap-4">
+            ${PAYMENT_METHODS.map(method => `
+                <div class="flex flex-col items-center justify-center text-center gap-3 rounded-2xl border border-zinc-100 bg-white p-5 shadow-luxe-sm">
+                    <img src="${method.src}" alt="${escapeHtml(method.name)}" class="h-10 w-auto max-w-[80%] object-contain" />
+                    <span>
+                        <span class="block text-sm font-semibold text-ink">${escapeHtml(method.name)}</span>
+                        <span class="block text-[11px] text-zinc-400">${escapeHtml(method.note)}</span>
+                    </span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    const empaque = state.settings?.empaque || DEFAULT_EMPAQUE;
+    const empaqueImg = empaque.image ? normalizeImageUrl(empaque.image) : '';
+    const empaqueHtml = `
+        <div class="space-y-4">
+            ${empaqueImg
+                ? `<img src="${empaqueImg}" alt="Empaque Gregori Joyería" class="w-full h-56 rounded-2xl object-cover border border-zinc-100" referrerpolicy="no-referrer" onerror="handleImageError(this)" data-image-source="${escapeHtml(empaqueImg)}" data-image-label="Empaque" data-image-kind="product" />`
+                : `<div class="w-full h-56 rounded-2xl bg-cream flex items-center justify-center text-gold-dark border border-zinc-100"><i class="fas fa-gift text-5xl"></i></div>`}
+            <p class="text-sm text-zinc-600 leading-relaxed whitespace-pre-line">${escapeHtml(empaque.description || DEFAULT_EMPAQUE.description)}</p>
+        </div>
+    `;
+
+    const careHtml = `
+        <p class="text-[11px] uppercase tracking-wide2 text-zinc-400 mb-2">Material: ${escapeHtml(material)}</p>
+        <p class="text-sm text-zinc-600 leading-relaxed whitespace-pre-line">${escapeHtml(getProductCareText(product))}</p>
+    `;
+
+    return `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+            ${renderExtraAccordion({ icon: 'fa-credit-card', title: 'Medios de pago', subtitle: 'Nequi · Bre-B', body: paymentsHtml, open: true })}
+            ${renderExtraAccordion({ icon: 'fa-gift', title: 'Empaque', subtitle: 'Presentación de tu joya', body: empaqueHtml, open: true })}
+            ${renderExtraAccordion({ icon: 'fa-hand-sparkles', title: 'Cuidado de tu joya', subtitle: '', body: careHtml, open: true })}
+        </div>
+    `;
+}
+
 function openModal(id) {
     const product = state.products.find(p => p.id === id);
     if (!product) return;
@@ -1588,6 +1748,9 @@ function openModal(id) {
                         <i class="fas fa-shield-alt"></i><span>100% Compra Segura Online - Envío Asegurado</span>
                     </div>
                 </div>
+            </div>
+            <div id="product-extras" class="mt-12 md:mt-16">
+                ${renderProductExtras(product)}
             </div>
             ${renderRelatedProducts(product)}
         </div>
@@ -2025,6 +2188,77 @@ async function handleAddProduct(e) {
     }
 }
 
+// --- CONFIGURACIÓN DE LA TIENDA (empaque y cuidado) DESDE EL ADMIN ---
+function materialSlug(material) {
+    return normalizeText(material).replace(/\s+/g, '-');
+}
+
+function empaquePreviewMarkup(rawUrl) {
+    const normalized = rawUrl ? normalizeImageUrl(rawUrl) : '';
+    return normalized
+        ? `<img src="${normalized}" alt="Vista previa del empaque" class="h-40 w-40 rounded-2xl object-cover border border-zinc-100" referrerpolicy="no-referrer" onerror="handleImageError(this)" data-image-source="${escapeHtml(normalized)}" data-image-label="Empaque" data-image-kind="product" />`
+        : `<div class="h-40 w-40 rounded-2xl bg-cream flex items-center justify-center text-gold-dark border border-zinc-100"><i class="fas fa-gift text-4xl"></i></div>`;
+}
+
+function updateEmpaquePreview() {
+    const input = document.getElementById('cfg-empaque-img');
+    const preview = document.getElementById('cfg-empaque-preview');
+    if (input && preview) preview.innerHTML = empaquePreviewMarkup(input.value);
+}
+
+// Resincroniza los campos del formulario de configuración sin pisar el que se esté editando
+function hydrateSettingsForm() {
+    const active = document.activeElement;
+    const setVal = (id, value) => {
+        const el = document.getElementById(id);
+        if (el && el !== active) el.value = value;
+    };
+    setVal('cfg-empaque-img', state.settings.empaque.image || '');
+    setVal('cfg-empaque-desc', state.settings.empaque.description || '');
+    JEWELRY_MATERIALS.forEach(m => {
+        const value = state.settings.cuidado[m] != null ? state.settings.cuidado[m] : (DEFAULT_CARE[m] || '');
+        setVal(`cfg-care-${materialSlug(m)}`, value);
+    });
+    updateEmpaquePreview();
+}
+
+async function handleSaveSettings(e) {
+    e.preventDefault();
+    const submitButton = document.getElementById('cfg-submit');
+    const empaqueImgRaw = document.getElementById('cfg-empaque-img')?.value.trim() || '';
+    const empaqueImg = empaqueImgRaw ? normalizeImageUrl(empaqueImgRaw) : '';
+    const empaqueDesc = document.getElementById('cfg-empaque-desc')?.value.trim() || '';
+
+    const cuidado = {};
+    JEWELRY_MATERIALS.forEach(m => {
+        const el = document.getElementById(`cfg-care-${materialSlug(m)}`);
+        cuidado[m] = el ? el.value.trim() : '';
+    });
+
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Guardando...';
+        submitButton.classList.add('opacity-70', 'cursor-not-allowed');
+    }
+
+    try {
+        await setDoc(doc(db, "settings", "config"), {
+            empaque: { image: empaqueImg, description: empaqueDesc },
+            cuidado
+        }, { merge: true });
+        showToast("Configuración guardada correctamente.", 'success');
+    } catch (error) {
+        console.error("Error guardando la configuración: ", error);
+        showToast("No se pudo guardar la configuración.", 'error');
+    } finally {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Guardar configuración';
+            submitButton.classList.remove('opacity-70', 'cursor-not-allowed');
+        }
+    }
+}
+
 // --- EXPORTAR FUNCIONES AL SCOPE GLOBAL ---
 // Al conectar Firebase como módulo moderno, las funciones necesitan exponerse manualmente.
 Object.assign(window, {
@@ -2035,7 +2269,8 @@ Object.assign(window, {
     openWorkWithUsWhatsApp, formatAdminPriceInput, seedInitialData, showToast,
     addToCart, changeCartQuantity, removeFromCart, clearCart, checkoutCartWhatsApp,
     startEditProduct, cancelEditProduct,
-    toggleWishlist, handleContactForm
+    toggleWishlist, handleContactForm,
+    handleSaveSettings, updateEmpaquePreview
 });
 
 // --- INICIALIZACIÓN ---
