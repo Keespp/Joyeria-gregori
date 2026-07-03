@@ -19,7 +19,7 @@ Firebase runs against the live `gregori-joyeria` project (config is inlined in `
 
 ## Architecture
 
-The entire application lives in **`assets/js/app.js`** (~2000 lines, no modules split out). It is a hand-rolled reactive SPA built on three ideas:
+The entire application lives in **`assets/js/app.js`** (~1650 lines, no modules split out). It is a hand-rolled reactive SPA built on three ideas:
 
 1. **Single `state` object** — the source of truth (active tab, filters, cart, admin auth, `products` array, selected product, editing id). There is no framework; rendering is manual.
 
